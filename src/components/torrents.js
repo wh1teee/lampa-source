@@ -57,6 +57,37 @@ function component(object){
     let last
     let last_filter
     let initialized
+    let active_quick_chip = 'all'
+
+    function prepareTorrentItems(list){
+        if(!Array.isArray(list)) return
+        list.forEach(element => {
+            element.general = TitleParser.general((element.Title || '').toLowerCase())
+            let qInfo = CubPro.classifyTorrentQuality(element.Title || '', element.num_quality_code, element.info, element.ffprobe)
+            let vInfo = CubPro.classifyTorrentVoice(element.Title || '', element.num_voice_code)
+            element._qInfo = qInfo
+            element._vInfo = vInfo
+            if(!element.num_quality_code) element.num_quality_code = qInfo.code
+            if(!element.num_quality_label && qInfo.label) element.num_quality_label = qInfo.label
+        })
+    }
+
+    function matchesQuickChip(element, chipId){
+        if(!chipId || chipId === 'all') return true
+        let q = element._qInfo || CubPro.classifyTorrentQuality(element.Title || '', element.num_quality_code, element.info, element.ffprobe)
+        let v = element._vInfo || CubPro.classifyTorrentVoice(element.Title || '', element.num_voice_code)
+        let general = element.general || {}
+        if(chipId === '4k') return q.code >= 300
+        if(chipId === 'hdr_dv') return Boolean(q.isDv || q.isHdr || general.hdr)
+        if(chipId === '1080p') return q.code >= 100 && q.code < 300
+        if(chipId === 'dub'){
+            if(v.code === 1) return true
+            let voicesArr = element.info && Array.isArray(element.info.voices) ? element.info.voices : []
+            if(voicesArr.some(vn => /дубл|dub/i.test(vn))) return true
+            return /дублирован|дубляж|\bdub\b|[,|\s]дб[,|\s|$]/i.test(element.Title || '')
+        }
+        return true
+    }
 
     let filter_items = {
         quality: [Lang.translate('torrent_parser_any_one'),'4k','1080p','720p'],
@@ -87,6 +118,7 @@ function component(object){
 
     let sort_translate = {
         popular: Lang.translate('title_popular'),
+        quality: 'По качеству (4K → SD)',
         Seeders: Lang.translate('torrent_parser_sort_by_seeders'),
         Size: Lang.translate('torrent_parser_sort_by_size'),
         Title: Lang.translate('torrent_parser_sort_by_name'),
@@ -156,12 +188,36 @@ function component(object){
     this.parse = function(){
         filter = new Filter(object)
 
+        object.onRevalidate = (freshData)=>{
+            if(!results || !freshData || !Array.isArray(freshData.Results)) return
+            prepareTorrentItems(freshData.Results)
+
+            // Бесшовное обновление сидов/пиров в уже отрендеренном списке без сброса фокуса
+            let root = scroll.render()
+            freshData.Results.forEach(freshItem => {
+                let selector = freshItem._btih ? '[data-btih="'+freshItem._btih+'"]' : '[data-thash="'+freshItem.hash+'"]'
+                let domNode  = root.find('.torrent-item' + selector)
+                if(domNode.length){
+                    if(!isNaN(freshItem.Seeders)) domNode.find('.torrent-item__seeds span').text(freshItem.Seeders)
+                    if(!isNaN(freshItem.Peers))   domNode.find('.torrent-item__grabs span').text(freshItem.Peers)
+                }
+            })
+
+            // Также обновляем данные в памяти для последующих фильтраций/сортировок
+            let oldCount = results.Results ? results.Results.length : 0
+            results = freshData
+            let need = Storage.get('torrents_sort','popular')
+            this.sortResults(need)
+            this.renderQuickChips()
+            if(freshData.Results.length > oldCount && oldCount === 0){
+                this.applyFilter()
+            }
+        }
+
         Parser.get(object,(data)=>{
             results = data
 
-            results.Results.forEach(element => {
-                element.general = TitleParser.general(element.Title.toLowerCase())
-            })
+            prepareTorrentItems(results.Results)
 
             this.build()
 
@@ -193,6 +249,52 @@ function component(object){
         filter.addButtonBack()
 
         files.appendHead(filter.render())
+    }
+
+    this.renderQuickChips = function(){
+        if(!filter || !results || !Array.isArray(results.Results) || !results.Results.length) return
+        let head = files.render().find('.explorer__files-head')
+        if(!head.length) return
+
+        head.find('.torrent-quick-filters').remove()
+
+        let list = results.Results
+        let chips = [
+            { id: 'all',    title: 'Все',     count: list.length },
+            { id: '4k',     title: '4K UHD',  count: list.filter(e => matchesQuickChip(e, '4k')).length },
+            { id: 'hdr_dv', title: 'DV / HDR',count: list.filter(e => matchesQuickChip(e, 'hdr_dv')).length },
+            { id: '1080p',  title: '1080p',   count: list.filter(e => matchesQuickChip(e, '1080p')).length },
+            { id: 'dub',    title: 'Дубляж',  count: list.filter(e => matchesQuickChip(e, 'dub')).length }
+        ].filter(c => c.id === 'all' || c.count > 0)
+
+        if(chips.length <= 1) return
+
+        let container = $('<div class="torrent-quick-filters"></div>')
+
+        chips.forEach(chip => {
+            let btn = $('<div class="simple-button torrent-quick-chip selector' + (active_quick_chip === chip.id ? ' active' : '') + '" data-chip="' + chip.id + '"><span>' + chip.title + '</span><b>' + chip.count + '</b></div>')
+
+            btn.on('hover:focus', (e)=>{
+                last_filter = e.target
+            }).on('hover:enter', ()=>{
+                active_quick_chip = (active_quick_chip === chip.id && chip.id !== 'all') ? 'all' : chip.id
+                container.find('.torrent-quick-chip').removeClass('active')
+                container.find('[data-chip="' + active_quick_chip + '"]').addClass('active')
+
+                this.filtred()
+                this.reset()
+                this.showResults()
+
+                Controller.collectionSet(scroll.render(), files.render(true))
+                let targetChip = container.find('[data-chip="' + active_quick_chip + '"]')[0]
+                if(targetChip) Navigator.focused(targetChip)
+            })
+
+            container.append(btn)
+        })
+
+        head.append(container)
+        scroll.minus(head)
     }
 
     this.empty = function(descr, add_button){
@@ -251,6 +353,10 @@ function component(object){
                 sort: 'popular'
             },
             {
+                title: 'По качеству (4K → SD)',
+                sort: 'quality'
+            },
+            {
                 title: Lang.translate('torrent_parser_sort_by_seeders'),
                 sort: 'Seeders'
             },
@@ -302,25 +408,34 @@ function component(object){
                 )
             })
         }
+        else if(need == 'quality'){
+            results.Results.sort((a, b) => {
+                let qa = a.num_quality_code || (a._qInfo && a._qInfo.code) || 0
+                let qb = b.num_quality_code || (b._qInfo && b._qInfo.code) || 0
+                return (qb - qa) || ((b.Seeders || 0) - (a.Seeders || 0)) || ((b.Size || 0) - (a.Size || 0))
+            })
+        }
         else if(need == 'popular') filter.sort(results.Results, 'Seeders')
         else filter.sort(results.Results, need)
 
-        this.sortWithViewed()
+        this.sortWithViewed(need)
     }
 
-    this.sortWithViewed = function(){
+    this.sortWithViewed = function(need){
         let popular      = []
         let num_verified = []
         let other        = []
 
         results.Results.forEach((a)=>{
             if(a.viewed) popular.push(a)
-            else if(a.source_rank === -1) num_verified.push(a)
+            else if((!need || need === 'popular') && a.source_rank === -1) num_verified.push(a)
             else other.push(a)
         })
 
         popular.sort((a,b)=>b.Seeders - a.Seeders)
-        num_verified.sort((a,b)=>(b.num_quality_code || 0) - (a.num_quality_code || 0) || b.Seeders - a.Seeders)
+        if(num_verified.length){
+            num_verified.sort((a,b)=>(b.num_quality_code || 0) - (a.num_quality_code || 0) || b.Seeders - a.Seeders)
+        }
 
         results.Results = popular.concat(num_verified).concat(other)
     }
@@ -333,7 +448,17 @@ function component(object){
         let all = Storage.cache('torrents_filter_data',500,{})
         let cid = this.cardID()
 
-        return all[cid] || Storage.get('torrents_filter','{}') 
+        if(all[cid]) return Arrays.clone(all[cid])
+
+        // Глобальный фоллбэк переносит только универсальные предпочтения (качество/язык),
+        // чтобы специфичные для другого фильма сезон/трекер/год/студия не создавали пустой экран
+        let shared = Storage.get('torrents_filter','{}')
+        let safe   = {}
+        if(shared && typeof shared === 'object'){
+            if(shared.quality) safe.quality = Arrays.clone(shared.quality)
+            if(shared.lang)    safe.lang    = Arrays.clone(shared.lang)
+        }
+        return safe
     }
 
     this.setFilterData = function(filter){
@@ -343,7 +468,13 @@ function component(object){
         all[cid] = filter
 
         Storage.set('torrents_filter_data',all)
-        Storage.set('torrents_filter',filter)
+
+        let shared = {}
+        if(filter && typeof filter === 'object'){
+            if(filter.quality) shared.quality = filter.quality
+            if(filter.lang)    shared.lang    = filter.lang
+        }
+        Storage.set('torrents_filter',shared)
     }
 
     this.buildFilterd = function(){
@@ -497,8 +628,17 @@ function component(object){
     this.build = function(){
         this.buildSorted()
         this.buildFilterd()
+        this.renderQuickChips()
 
         this.filtred()
+
+        // Защита от ловушки пустого фильтра при открытии фильма: если торренты есть, но старый фильтр отсек все — сбрасываем фильтр
+        if(filtred.length === 0 && results.Results && results.Results.length > 0){
+            active_quick_chip = 'all'
+            this.setFilterData({})
+            this.buildFilterd()
+            this.filtred()
+        }
 
         filter.onSelect = (type, a, b)=>{
             if(type == 'sort'){
@@ -508,9 +648,11 @@ function component(object){
             }
             else{
                 if(a.reset){
+                    active_quick_chip = 'all'
                     this.setFilterData({})
 
                     this.buildFilterd()
+                    this.renderQuickChips()
                 }
                 else{
                     a.items.forEach(n=>n.checked = false)
@@ -534,7 +676,7 @@ function component(object){
             let data = this.getFilterData(),
                 need = Arrays.toArray(data[a.stype])
 
-            if(b.checked && need.indexOf(b.title)) need.push(b.title)
+            if(b.checked && need.indexOf(b.title) === -1) need.push(b.title)
             else if(!b.checked) Arrays.remove(need, b.title)
 
             data[a.stype] = need
@@ -582,6 +724,10 @@ function component(object){
         }
 
         filtred  = results.Results.filter((element)=>{
+            if(active_quick_chip && active_quick_chip !== 'all'){
+                if(!matchesQuickChip(element, active_quick_chip)) return false
+            }
+
             if(filter_any){
                 let passed  = false,
                     nopass  = false,
@@ -623,9 +769,10 @@ function component(object){
 
                     arr.forEach(a=>{
                         if(type == 'quality'){
-                            if(a == '4k' && test('(4k|uhd)[ |\\]|,|$]|2160[pр]|ultrahd')) any = true
-                            if(a == '1080p' && test('fullhd|1080[pр]')) any = true
-                            if(a == '720p' && test('720[pр]')) any = true
+                            let qCode = element.num_quality_code || (element._qInfo && element._qInfo.code) || 0
+                            if(a == '4k' && (qCode >= 300 || test('(4k|uhd)[ |\\]|,|$]|2160[pр]|ultrahd'))) any = true
+                            if(a == '1080p' && ((qCode >= 100 && qCode < 300) || test('fullhd|1080[pр]'))) any = true
+                            if(a == '720p' && ((qCode >= 80 && qCode < 100) || test('720[pр]'))) any = true
                         }
                         if(type == 'voice'){
                             let p = filter_items.voice.indexOf(a)
@@ -813,6 +960,8 @@ function component(object){
             })
 
             let item = Template.get('torrent',element)
+            if(element._btih) item.attr('data-btih', element._btih)
+            if(element.hash)  item.attr('data-thash', element.hash)
             let need_remove_ffprobe = false
 
             if(!element.ffprobe){
@@ -825,8 +974,8 @@ function component(object){
                 let ffprobe_elem = item.find('.torrent-item__ffprobe')
                 let ffprobe_tags = []
                 let general      = element.general || {}
-                let numQ         = CubPro.classifyTorrentQuality(element.Title || '', element.num_quality_code)
-                let numV         = CubPro.classifyTorrentVoice(element.Title || '', element.num_voice_code)
+                let numQ         = element._qInfo || CubPro.classifyTorrentQuality(element.Title || '', element.num_quality_code, element.info, element.ffprobe)
+                let numV         = element._vInfo || CubPro.classifyTorrentVoice(element.Title || '', element.num_voice_code)
                 let quality      = element.num_quality_label || numQ.label || general.resolution || (element.info && element.info.quality ? Utils.qualityToText(element.info.quality + 'p') : '')
 
                 if(object.movie.number_of_seasons && general.season){

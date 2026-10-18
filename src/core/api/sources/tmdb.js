@@ -869,7 +869,27 @@ function list(params = {}, oncomplite, onerror, attempt = 0){
     })
 }
 
+let tmdbSearchMemCache = {}
+
 function search(params = {}, oncomplite){
+    let rawQuery = ''
+    try {
+        rawQuery = decodeURIComponent(params.query || '')
+    } catch (e) {
+        rawQuery = String(params.query || '')
+    }
+    let normalizedQuery = CubPro.normalizeSearchQuery(rawQuery)
+    let memKey = normalizedQuery.toLowerCase().trim()
+    let cached = memKey && tmdbSearchMemCache[memKey]
+    if(cached && (Date.now() - cached.time) < 15 * 60 * 1000 && Array.isArray(cached.items) && cached.items.length){
+        oncomplite(cached.items)
+        return
+    }
+
+    let searchParams = Object.assign({}, params, {
+        query: encodeURIComponent(normalizedQuery)
+    })
+
     let status = new Status(3)
         status.onComplite = (data)=>{
             let items = []
@@ -878,24 +898,37 @@ function search(params = {}, oncomplite){
             if(data.tv && data.tv.results.length) items.push(data.tv)
             if(data.person && data.person.results.length) items.push(data.person)
 
+            if(memKey && items.length){
+                tmdbSearchMemCache[memKey] = {
+                    time: Date.now(),
+                    items: items
+                }
+            }
+
             oncomplite(items)
         }
 
-    get('search/movie',params,(json)=>{
+    get('search/movie',searchParams,(json)=>{
         json.title = Lang.translate('menu_movies')
         json.type = 'movie'
+        if(Array.isArray(json.results)){
+            json.results.forEach(card => CubPro.enrichCard(card))
+        }
 
         status.append('movie', json)
-    },status.error.bind(status))
+    },status.error.bind(status), {life: 60 * 6})
 
-    get('search/tv',params,(json)=>{
+    get('search/tv',searchParams,(json)=>{
         json.title = Lang.translate('menu_tv')
         json.type = 'tv'
+        if(Array.isArray(json.results)){
+            json.results.forEach(card => CubPro.enrichCard(card))
+        }
 
         status.append('tv', json)
-    },status.error.bind(status))
+    },status.error.bind(status), {life: 60 * 6})
 
-    get('search/person',params,(json)=>{
+    get('search/person',searchParams,(json)=>{
         json.title = Lang.translate('title_actors')
         json.type = 'person'
 
@@ -906,7 +939,7 @@ function search(params = {}, oncomplite){
         })
 
         status.append('person', json)
-    },status.error.bind(status))
+    },status.error.bind(status), {life: 60 * 6})
 }
 
 function discovery(){

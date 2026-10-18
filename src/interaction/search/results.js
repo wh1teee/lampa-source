@@ -9,6 +9,8 @@ import Router from '../../core/router'
 import Utils from '../../utils/utils'
 import Template from '../template'
 
+let memorySearchCache = {}
+
 function Results(source){
     let timer,
         html   = Template.elem('div'),
@@ -26,8 +28,20 @@ function Results(source){
     }
 
     this.recall = function(last_query){
-        Cache.getData('other', source_name + '_' + (last_query || 'last'), 60 * 24).then((data)=>{
+        let memKey = source_name + '_' + (last_query || 'last')
+        if (memorySearchCache[memKey]) {
+            let data = Arrays.clone(memorySearchCache[memKey])
+            this.clear()
+            html.empty()
+            source.onRecall && source.onRecall(data, last_query)
+            data.forEach(this.build.bind(this))
+            this.listener.send('finded',{count: this.count(data), data})
+            return
+        }
+        Cache.getData('other', memKey, 60 * 24).then((data)=>{
             if(!data) return
+
+            memorySearchCache[memKey] = Arrays.clone(data)
 
             this.clear()
             
@@ -60,7 +74,21 @@ function Results(source){
     this.search = function(value, immediately){
         clearTimeout(timer)
 
-        if(value.length >= 3){
+        let cleanVal = String(value || '').trim()
+
+        if(cleanVal.length >= 2){
+            let memKey = source_name + '_' + cleanVal.toLowerCase()
+            if(memorySearchCache[memKey] && query !== value){
+                query = value
+                let cachedData = Arrays.clone(memorySearchCache[memKey])
+                this.clear()
+                html.empty()
+                source.onRecall && source.onRecall(cachedData, value)
+                cachedData.forEach(this.build.bind(this))
+                this.listener.send('finded',{count: this.count(cachedData), data: cachedData})
+                return
+            }
+
             timer = setTimeout(()=>{
                 if(query == value) return
 
@@ -68,7 +96,7 @@ function Results(source){
 
                 this.loading()
 
-                source.search({query: encodeURIComponent(value)},(data)=>{
+                source.search({query: encodeURIComponent(cleanVal)},(data)=>{
                     this.clear()
 
                     this.dmca(data)
@@ -80,6 +108,9 @@ function Results(source){
 
                         let copy = Arrays.clone(data)
 
+                        memorySearchCache[memKey] = copy
+                        memorySearchCache[source_name + '_last'] = copy
+
                         Cache.rewriteData('other', source_name + '_' + value, copy).catch(()=>{})
                         Cache.rewriteData('other', source_name + '_last', copy).catch(()=>{})
 
@@ -89,7 +120,7 @@ function Results(source){
 
                     this.listener.send('finded',{count, data})
                 })
-            },immediately ? 10 : 2500)
+            },immediately ? 10 : 350)
         }
         else{
             query = value

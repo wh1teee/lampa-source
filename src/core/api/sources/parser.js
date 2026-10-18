@@ -104,6 +104,16 @@ function init(){
     addSource()
 }
 
+const BUILTIN_JACKETT_MIRRORS = [
+    { url: 'https://jr.maxvol.pro', key: '1', rank: 2 },
+    { url: 'http://jac.red', key: '1', rank: 3 }
+]
+
+let torrentsSwrMemory = {}
+let inFlightSwrCallbacks = {}
+const TORRENTS_FRESH_TTL_MS = 60 * 1000 // 60s fresh (no network needed)
+const TORRENTS_STALE_TTL_MS = 24 * 60 * 60 * 1000 // 24h stale-while-revalidate
+
 function parserLinks(type){
     if(type == 'jackett'){
         return [
@@ -123,14 +133,43 @@ function parserLinks(type){
 function selectParserLinks(type){
     let use   = Storage.field('parser_use_link') || 'one'
     let links = parserLinks(type)
+    let selected = []
 
-    if(use == 'one') return links[0] && links[0].url ? [links[0]] : []
-    if(use == 'two') return links[1] && links[1].url ? [links[1]] : []
+    if(use == 'one') selected = links[0] && links[0].url ? [links[0]] : []
+    else if(use == 'two') selected = links[1] && links[1].url ? [links[1]] : []
+    else selected = links.filter(l=>l && l.url)
 
-    return links.filter(l=>l && l.url)
+    if(type == 'jackett'){
+        let seenHosts = {}
+        selected.forEach(l => {
+            let clean = String(l.url || '').replace(/^https?:\/\//i, '').replace(/\/+$/, '').toLowerCase()
+            if(clean) seenHosts[clean] = true
+        })
+        BUILTIN_JACKETT_MIRRORS.forEach(mirror => {
+            let clean = mirror.url.replace(/^https?:\/\//i, '').replace(/\/+$/, '').toLowerCase()
+            if(!seenHosts[clean] && selected.length < 2){
+                seenHosts[clean] = true
+                selected.push(mirror)
+            }
+        })
+    }
+
+    return selected
+}
+
+function extractInfoHash(uri = ''){
+    if(!uri) return ''
+    let m = String(uri).match(/xt=urn:btih:([a-fA-F0-9]{40}|[a-zA-Z2-7]{32})/i)
+    return m ? m[1].toLowerCase() : ''
 }
 
 function resultKey(item){
+    let btih = item._btih || extractInfoHash(item.MagnetUri || item.downloadUrl || item.Link || '')
+    if(btih){
+        item._btih = btih
+        return 'btih:' + btih
+    }
+
     if(item.MagnetUri) return 'm:' + item.MagnetUri
     if(item.downloadUrl) return 'm:' + item.downloadUrl
 
@@ -139,6 +178,27 @@ function resultKey(item){
     let hash    = item.hash || Utils.hash((item.Title || '') + size + tracker)
 
     return 'h:' + hash + '|' + size + '|' + tracker
+}
+
+function fuseDuplicateTorrent(primary, secondary){
+    if(!primary || !secondary) return primary || secondary
+    let fused = Object.assign({}, primary)
+    if(!fused._btih && secondary._btih) fused._btih = secondary._btih
+    fused.Seeders = Math.max(Number(primary.Seeders || 0), Number(secondary.Seeders || 0))
+    fused.Peers   = Math.max(Number(primary.Peers || 0), Number(secondary.Peers || 0))
+    if(!fused.ffprobe && secondary.ffprobe) fused.ffprobe = secondary.ffprobe
+    if(!fused.languages && secondary.languages) fused.languages = secondary.languages
+    if(secondary.info){
+        fused.info = fused.info || {}
+        if(!fused.info.videotype && secondary.info.videotype) fused.info.videotype = secondary.info.videotype
+        if(Array.isArray(secondary.info.voices)){
+            fused.info.voices = fused.info.voices || []
+            secondary.info.voices.forEach(v => {
+                if(fused.info.voices.indexOf(v) === -1) fused.info.voices.push(v)
+            })
+        }
+    }
+    return fused
 }
 
 function mergeResults(items){
@@ -154,13 +214,16 @@ function mergeResults(items){
             let next_rank = typeof item.source_rank == 'number' ? item.source_rank : 0
 
             if(next_rank < prev_rank) {
-                map.set(key, item)
+                map.set(key, fuseDuplicateTorrent(item, prev))
             }
-            else if(next_rank == prev_rank){
-                let prev_time = prev.checked_at || 0
-                let next_time = item.checked_at || 0
-
-                if(next_time > prev_time) map.set(key, item)
+            else if(prev_rank < next_rank) {
+                map.set(key, fuseDuplicateTorrent(prev, item))
+            }
+            else {
+                let prev_seeds = Number(prev.Seeders || 0)
+                let next_seeds = Number(item.Seeders || 0)
+                if(next_seeds > prev_seeds) map.set(key, fuseDuplicateTorrent(item, prev))
+                else map.set(key, fuseDuplicateTorrent(prev, item))
             }
         }
     })
@@ -168,7 +231,84 @@ function mergeResults(items){
     return Array.from(map.values())
 }
 
+function buildSwrKey(params = {}){
+    let movieId = params.movie && params.movie.id ? (params.movie.id + ':' + (params.movie.number_of_seasons || params.movie.original_name ? 'tv' : 'movie')) : 'search'
+    let query   = String(params.search || (params.movie && (params.movie.title || params.movie.name)) || '').toLowerCase().trim()
+    let clar    = params.clarification ? '1' : '0'
+    let glob    = params.global ? '1' : '0'
+    return movieId + '|' + query + '|' + clar + '|' + glob
+}
+
+function cloneTorrentResults(list = []){
+    return (list || []).map(item => {
+        let copy = Object.assign({}, item)
+        copy.viewed = viewed(copy.hash)
+        if(item.info) copy.info = Object.assign({}, item.info, { voices: Array.isArray(item.info.voices) ? item.info.voices.slice() : [] })
+        return copy
+    })
+}
+
+function runFastMirrorPool(calls, onSuccess, onFail){
+    if(calls.length === 1){
+        calls[0](onSuccess, onFail)
+        return
+    }
+
+    let results = new Array(calls.length)
+    let pending = calls.length
+    let settled = false
+    let graceTimer = null
+    let firstError = null
+
+    function finishNow(){
+        if(settled) return
+        settled = true
+        if(graceTimer) clearTimeout(graceTimer)
+
+        let allItems = []
+        let hasAny = false
+        for(let i = 0; i < results.length; i++){
+            if(results[i] && Array.isArray(results[i].Results)){
+                hasAny = true
+                allItems = allItems.concat(results[i].Results)
+            }
+        }
+
+        if(hasAny){
+            onSuccess({ Results: mergeResults(allItems) })
+        } else {
+            onFail(firstError || '')
+        }
+    }
+
+    calls.forEach((call, index)=>{
+        call((json)=>{
+            results[index] = json
+            pending--
+
+            if(pending === 0){
+                finishNow()
+            } else if(!graceTimer && json && Array.isArray(json.Results) && json.Results.length > 0){
+                // Fastest mirror succeeded with results: give slower mirror 220ms to merge, never block for 15s
+                graceTimer = setTimeout(finishNow, 220)
+            }
+        },(e)=>{
+            results[index] = null
+            firstError = firstError || e
+            pending--
+
+            if(pending === 0){
+                finishNow()
+            }
+        })
+    })
+}
+
 function get(params = {}, oncomplite, onerror){
+    let swrKey = buildSwrKey(params)
+    let now = Date.now()
+    let cachedEntry = torrentsSwrMemory[swrKey]
+
     let numPreIndexed = (!params.from_search && params.movie)
         ? CubPro.getNumTorrentsForCard(params.movie).map(item => {
             item.viewed = viewed(item.hash)
@@ -177,16 +317,15 @@ function get(params = {}, oncomplite, onerror){
         : []
 
     function finalizeResults(rawList){
-        let combined = numPreIndexed.length ? mergeResults(numPreIndexed.concat(rawList || [])) : (rawList || [])
+        let combined = numPreIndexed.length ? mergeResults(numPreIndexed.concat(rawList || [])) : mergeResults(rawList || [])
         let cleaned = combined.filter(item => !CubPro.isJunkTorrent(item.Title || item.title || ''))
         let finalItems = cleaned.length ? cleaned : combined
 
         finalItems.forEach(item => {
-            if (!item.num_quality_label) {
-                let q = CubPro.classifyTorrentQuality(item.Title || '', item.num_quality_code)
-                item.num_quality_code = q.code
-                item.num_quality_label = q.label
-            }
+            let q = CubPro.classifyTorrentQuality(item.Title || '', item.num_quality_code, item.info, item.ffprobe)
+            item.num_quality_code = q.code
+            item.num_quality_label = q.label
+
             if (!item.num_voice_label) {
                 let v = CubPro.classifyTorrentVoice(item.Title || '', item.num_voice_code)
                 item.num_voice_code = v.code
@@ -205,25 +344,96 @@ function get(params = {}, oncomplite, onerror){
         return finalItems
     }
 
+    let servedFromCache = false
+    if(cachedEntry && Array.isArray(cachedEntry.items) && cachedEntry.items.length > 0 && !params.force_refresh){
+        let age = now - (cachedEntry.time || 0)
+        if(age < TORRENTS_FRESH_TTL_MS){
+            oncomplite({
+                Results: cloneTorrentResults(cachedEntry.items),
+                from_cache: true,
+                revalidating: false
+            })
+            return
+        }
+        if(age < TORRENTS_STALE_TTL_MS){
+            servedFromCache = true
+            oncomplite({
+                Results: cloneTorrentResults(cachedEntry.items),
+                from_cache: true,
+                revalidating: true
+            })
+        }
+    }
+
+    // Если спекулятивный prefetch уже летит по этому же ключу — присоединяемся к нему без дублирования запросов
+    if(!servedFromCache && inFlightSwrCallbacks[swrKey]){
+        inFlightSwrCallbacks[swrKey].push({ oncomplite, onerror })
+        return
+    }
+    if(!servedFromCache){
+        inFlightSwrCallbacks[swrKey] = [{ oncomplite, onerror }]
+    }
+
     function complite(data){
         let list = (data && Array.isArray(data.Results)) ? data.Results : []
-        oncomplite({ Results: finalizeResults(list) })
+        let finalItems = finalizeResults(list)
+
+        if(finalItems.length > 0){
+            torrentsSwrMemory[swrKey] = {
+                time: Date.now(),
+                items: cloneTorrentResults(finalItems)
+            }
+        }
+
+        if(servedFromCache){
+            if(typeof params.onRevalidate === 'function'){
+                params.onRevalidate({
+                    Results: cloneTorrentResults(finalItems),
+                    revalidated_at: Date.now()
+                })
+            }
+        } else {
+            let waiters = inFlightSwrCallbacks[swrKey] || [{ oncomplite }]
+            delete inFlightSwrCallbacks[swrKey]
+            waiters.forEach(w => {
+                if(w && typeof w.oncomplite === 'function'){
+                    w.oncomplite({ Results: cloneTorrentResults(finalItems) })
+                }
+            })
+        }
     }
 
     function error(e){
+        if(servedFromCache) return
+        let waiters = inFlightSwrCallbacks[swrKey] || [{ oncomplite, onerror }]
+        delete inFlightSwrCallbacks[swrKey]
+
         if (numPreIndexed.length) {
-            oncomplite({ Results: finalizeResults([]) })
+            let fallbackItems = finalizeResults([])
+            torrentsSwrMemory[swrKey] = {
+                time: Date.now(),
+                items: cloneTorrentResults(fallbackItems)
+            }
+            waiters.forEach(w => {
+                if(w && typeof w.oncomplite === 'function'){
+                    w.oncomplite({ Results: cloneTorrentResults(fallbackItems) })
+                }
+            })
             return
         }
         if (Storage.field('parser_torrent_type') !== 'torrserver' && !params.__ts_fallback_tried) {
             let torr_link = Storage.field(Storage.field('torrserver_use_link') == 'two' ? 'torrserver_url_two' : 'torrserver_url')
             if (torr_link) {
                 params.__ts_fallback_tried = true
-                torrserver(params, Utils.checkEmptyUrl(torr_link), complite, () => onerror(e))
+                inFlightSwrCallbacks[swrKey] = waiters
+                torrserver(params, Utils.checkEmptyUrl(torr_link), complite, () => {
+                    delete inFlightSwrCallbacks[swrKey]
+                    waiters.forEach(w => w && w.onerror && w.onerror(e))
+                })
                 return
             }
         }
-        onerror(e)
+        waiters.forEach(w => w && w.onerror && w.onerror(e))
     }
 
     if(Storage.field('parser_torrent_type') == 'jackett'){
@@ -233,44 +443,11 @@ function get(params = {}, oncomplite, onerror){
             let calls = links.map(link=>{
                 return (done, fail)=>{
                     let base = Utils.checkEmptyUrl(link.url)
-
-                    let ignore = false//params.from_search && !base.match(/\d+\.\d+\.\d+/g)
-
-                    if(ignore) fail('')
-                    else jackett(params, base, link.key, link.rank, done, fail)
+                    jackett(params, base, link.key, link.rank, done, fail)
                 }
             })
 
-            if(calls.length == 1) calls[0](complite, error)
-            else{
-                let results = []
-                let pending = calls.length
-                let success = false
-                let first_error
-
-                calls.forEach((call, index)=>{
-                    call((json)=>{
-                        results[index] = json
-                        success = true
-
-                        if(--pending == 0){
-                            let merged = mergeResults([].concat(...results.map(r=>r && r.Results ? r.Results : [])))
-                            complite({Results: merged})
-                        }
-                    },(e)=>{
-                        results[index] = null
-                        first_error = first_error || e
-
-                        if(--pending == 0){
-                            if(success){
-                                let merged = mergeResults([].concat(...results.map(r=>r && r.Results ? r.Results : [])))
-                                complite({Results: merged})
-                            }
-                            else error(first_error || '')
-                        }
-                    })
-                })
-            }
+            runFastMirrorPool(calls, complite, error)
         }
         else{
             error(Lang.translate('torrent_parser_set_link') + ': Jackett')
@@ -287,36 +464,7 @@ function get(params = {}, oncomplite, onerror){
                 }
             })
 
-            if(calls.length == 1) calls[0](complite, error)
-            else{
-                let results = []
-                let pending = calls.length
-                let success = false
-                let first_error
-
-                calls.forEach((call, index)=>{
-                    call((json)=>{
-                        results[index] = json
-                        success = true
-
-                        if(--pending == 0){
-                            let merged = mergeResults([].concat(...results.map(r=>r && r.Results ? r.Results : [])))
-                            complite({Results: merged})
-                        }
-                    },(e)=>{
-                        results[index] = null
-                        first_error = first_error || e
-
-                        if(--pending == 0){
-                            if(success){
-                                let merged = mergeResults([].concat(...results.map(r=>r && r.Results ? r.Results : [])))
-                                complite({Results: merged})
-                            }
-                            else error(first_error || '')
-                        }
-                    })
-                })
-            }
+            runFastMirrorPool(calls, complite, error)
         } 
         else {
             error(Lang.translate('torrent_parser_set_link') + ': Prowlarr')
@@ -331,6 +479,21 @@ function get(params = {}, oncomplite, onerror){
             error(Lang.translate('torrent_parser_set_link') + ': TorrServer')
         }
     }
+}
+
+function prefetch(movie){
+    if(!movie || !movie.id) return
+    let searchTitle = movie.title || movie.name || movie.original_title || movie.original_name || ''
+    if(!searchTitle) return
+    let params = {
+        movie: movie,
+        search: searchTitle
+    }
+    let swrKey = buildSwrKey(params)
+    let cached = torrentsSwrMemory[swrKey]
+    if(cached && (Date.now() - (cached.time || 0)) < TORRENTS_FRESH_TTL_MS) return
+
+    get(params, ()=>{}, ()=>{})
 }
 
 function viewed(hash){
@@ -546,6 +709,7 @@ function clear(){
 export default {
     init,
     get,
+    prefetch,
     jackett,
     clear
 }

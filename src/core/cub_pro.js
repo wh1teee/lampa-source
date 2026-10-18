@@ -727,7 +727,9 @@ const NUM_QUALITY_MAP = {
     200: 'WEB-DL 1080p',
     102: 'BDRip HEVC 720p',
     101: 'BDRip 720p',
-    100: 'WEB-DL 720p'
+    100: 'WEB-DL 720p',
+    51:  'BDRip 480p',
+    50:  'WEB-DLRip 480p'
 }
 
 const NUM_VOICE_TIER_MAP = {
@@ -786,19 +788,30 @@ function isJunkTorrent(title = '') {
     return NUM_JUNK_TORRENT_RX.test(String(title))
 }
 
-function classifyTorrentQuality(title = '', numericCode = 0) {
+function classifyTorrentQuality(title = '', numericCode = 0, infoObj = null, ffprobeArr = null) {
     let code = Number(numericCode || 0)
     let t = String(title || '').toLowerCase()
+    let infoQ = infoObj && Number(infoObj.quality || 0)
+    let infoVt = infoObj && String(infoObj.videotype || '').toLowerCase()
+    let videoStream = Array.isArray(ffprobeArr) ? ffprobeArr.find(a => a && a.codec_type === 'video') : null
+    let vWidth = videoStream ? Number(videoStream.width || 0) : 0
+    let vHeight = videoStream ? Number(videoStream.height || 0) : 0
 
     if (!NUM_QUALITY_MAP[code]) {
-        let is4k = /2160[pр]|\b4k\b|\buhd\b|ultrahd/.test(t)
-        let is1080 = /1080[pр]|\bfhd\b|fullhd/.test(t)
-        let is720 = /720[pр]/.test(t)
+        let is4k = /2160[pр]|\b4k\b|\buhd\b|ultrahd/.test(t) || infoQ === 2160 || vWidth >= 3000 || vHeight >= 1600
+        let is1080 = !is4k && (/1080[pрi]|\bfhd\b|fullhd/.test(t) || infoQ === 1080 || vWidth >= 1800 || vHeight >= 900)
+        let is720 = !is4k && !is1080 && (/720[pр]/.test(t) || infoQ === 720 || (vWidth >= 1100 && vWidth < 1800))
+        let is480 = !is4k && !is1080 && !is720 && (
+            /480[pр]|360[pр]|\bdvdrip\b|\bsatrip\b|\btvrip\b/.test(t) ||
+            (infoQ > 0 && infoQ <= 576) ||
+            (vWidth > 0 && vWidth < 1100) ||
+            (/\b(web-dlrip|webrip|bdrip|hdrip)\b/.test(t) && !/2160|1080|720/.test(t))
+        )
         let isRemux = /remux/.test(t)
         let isBd = /bdrip|blu[\s-]*ray|brrip/.test(t)
         let isHevc = /hevc|x265|h\.?265/.test(t)
-        let isDv = /dolby\s*vision|\bdv\b/.test(t)
-        let isHdr = /hdr10\+?|\bhdr\b/.test(t)
+        let isDv = /dolby\s*vision|\bdv\b/.test(t) || infoVt === 'dolbyvision'
+        let isHdr = /hdr10\+?|\bhdr\b/.test(t) || infoVt === 'hdr'
 
         if (is4k) {
             if (isRemux) code = isDv ? 309 : (isHdr ? 308 : 307)
@@ -813,6 +826,8 @@ function classifyTorrentQuality(title = '', numericCode = 0) {
             if (isBd && isHevc) code = 102
             else if (isBd) code = 101
             else code = 100
+        } else if (is480) {
+            code = isBd ? 51 : 50
         } else {
             code = 200
         }
@@ -820,15 +835,15 @@ function classifyTorrentQuality(title = '', numericCode = 0) {
 
     let label = NUM_QUALITY_MAP[code] || 'WEB-DL 1080p'
     let is4k = code >= 300
-    let isDv = code === 309 || code === 306 || code === 302 || /dolby\s*vision|\bdv\b/.test(t)
-    let isHdr = isDv || code === 308 || code === 305 || code === 301 || /hdr10\+?|\bhdr\b/.test(t)
+    let isDv = code === 309 || code === 306 || code === 302 || /dolby\s*vision|\bdv\b/.test(t) || infoVt === 'dolbyvision'
+    let isHdr = isDv || code === 308 || code === 305 || code === 301 || /hdr10\+?|\bhdr\b/.test(t) || infoVt === 'hdr'
     let isRemux = code === 309 || code === 308 || code === 307 || code === 203 || /remux/.test(t)
     let isHevc = is4k || code === 202 || code === 102 || /hevc|x265|h\.?265/.test(t)
 
     return {
         code,
         label,
-        shortBadge: is4k ? (isDv ? '4K DV' : (isHdr ? '4K HDR' : '4K')) : (code >= 200 ? 'FHD' : 'HD'),
+        shortBadge: is4k ? (isDv ? '4K DV' : (isHdr ? '4K HDR' : '4K')) : (code >= 200 ? 'FHD' : (code >= 100 ? 'HD' : 'SD')),
         is4k,
         isDv,
         isHdr,
@@ -898,6 +913,12 @@ const NUM_FEEDS = {
         media_type: 'movie',
         fallback_endpoint: 'discover/movie?with_genres=16&sort_by=popularity.desc'
     },
+    num_cartoons_tv: {
+        url: 'http://releases.yourok.ru/releases/cartoons_tv_id.json',
+        title: '🧸 NUM: Мультсериалы (Свежие релизы)',
+        media_type: 'tv',
+        fallback_endpoint: 'discover/tv?with_genres=16&sort_by=popularity.desc'
+    },
     num_anime: {
         url: 'http://releases.yourok.ru/releases/anime_id.json',
         title: '⛩️ NUM: Лучшее Аниме (Свежие релизы)',
@@ -911,7 +932,30 @@ const NUM_AI_COLLECTIONS_URL = 'http://releases.yourok.ru/releases/colls_movie_a
 let numFeedMemoryCache = {}
 let numFeedPromises = {}
 let numTorrentsByTmdbId = {}
+let numSearchIndex = {}
 let numAiCollectionsCache = null
+
+const EN_TO_RU_LAYOUT = {
+    'q':'й','w':'ц','e':'у','r':'к','t':'е','y':'н','u':'г','i':'ш','o':'щ','p':'з','[':'х',']':'ъ','{':'х','}':'ъ',
+    'a':'ф','s':'ы','d':'в','f':'а','g':'п','h':'р','j':'о','k':'л','l':'д',';':'ж',"'":'э',':':'ж','"':'э',
+    'z':'я','x':'ч','c':'с','v':'м','b':'и','n':'т','m':'ь',',':'б','.':'ю','<':'б','>':'ю','`':'ё','~':'ё'
+}
+
+function normalizeSearchQuery(query = '') {
+    let raw = String(query || '').trim()
+    if (!raw || raw.length < 2) return raw
+    // If query contains symbols typical of Russian typed in English layout (e.g. "<fkthbyf", "l.yf", ";bpym")
+    if (/[<>;:'"\[\]{},.`~]/.test(raw) && /^[a-zA-Z<>;:'"\[\]{},.`~\s0-9-]+$/.test(raw)) {
+        let converted = ''
+        let lower = raw.toLowerCase()
+        for (let i = 0; i < lower.length; i++) {
+            let ch = lower[i]
+            converted += EN_TO_RU_LAYOUT[ch] || ch
+        }
+        return converted
+    }
+    return raw
+}
 
 function indexNumItemTorrents(item, defaultMediaType = 'movie') {
     if (!item || !item.id || !Array.isArray(item.torrent) || !item.torrent.length) return
@@ -922,13 +966,56 @@ function indexNumItemTorrents(item, defaultMediaType = 'movie') {
     existing.forEach(t => {
         if (t && t.magnet) seenMagnets[t.magnet] = true
     })
+    let names = []
     item.torrent.forEach(t => {
         if (t && t.magnet && !seenMagnets[t.magnet]) {
             seenMagnets[t.magnet] = true
             existing.push(t)
         }
+        if (t && t.name) names.push(String(t.name).toLowerCase())
+        if (t && t.link) {
+            let slug = String(t.link).split('/').pop() || ''
+            names.push(slug.replace(/[-_]/g, ' ').toLowerCase())
+        }
     })
     numTorrentsByTmdbId[key] = existing
+    if (!numSearchIndex[key]) {
+        numSearchIndex[key] = {
+            id: Number(item.id),
+            media_type: mType,
+            title: (item.torrent[0] && item.torrent[0].name) || '',
+            search_text: names.join(' '),
+            vote_average: item.vote_average || 0,
+            release_date: item.release_date || '',
+            genre_ids: item.genre_ids || []
+        }
+    }
+}
+
+function searchNumReleases(query = '', limit = 15) {
+    let q = normalizeSearchQuery(query).toLowerCase().trim()
+    if (!q || q.length < 2) return []
+    let words = q.split(/\s+/).filter(Boolean)
+    let matches = []
+    let keys = Object.keys(numSearchIndex)
+    for (let i = 0; i < keys.length; i++) {
+        let entry = numSearchIndex[keys[i]]
+        let titleLower = (entry.title || '').toLowerCase()
+        let text = entry.search_text || titleLower
+        let allMatch = true
+        for (let w = 0; w < words.length; w++) {
+            if (text.indexOf(words[w]) === -1) {
+                allMatch = false
+                break
+            }
+        }
+        if (allMatch) {
+            let exactBoost = titleLower === q ? 100 : (titleLower.indexOf(q) === 0 ? 50 : 0)
+            matches.push({ entry, score: exactBoost + (entry.vote_average || 0) })
+        }
+    }
+    matches.sort((a, b) => b.score - a.score)
+    return matches.slice(0, limit).map(m => m.entry)
 }
 
 function parseNumDateToIso(dateStr = '') {
@@ -937,7 +1024,7 @@ function parseNumDateToIso(dateStr = '') {
     return dateStr || new Date().toISOString()
 }
 
-function fetchNumJson(url) {
+function fetchNumJson(url, defaultMediaType = 'movie') {
     if (numFeedMemoryCache[url]) {
         return Promise.resolve(numFeedMemoryCache[url])
     }
@@ -968,11 +1055,11 @@ function fetchNumJson(url) {
             if (json) {
                 numFeedMemoryCache[url] = json
                 if (Array.isArray(json.items)) {
-                    json.items.forEach(it => indexNumItemTorrents(it, it.media_type || 'movie'))
+                    json.items.forEach(it => indexNumItemTorrents(it, it.media_type || defaultMediaType))
                 } else if (Array.isArray(json)) {
                     json.forEach(col => {
                         if (col && Array.isArray(col.parts)) {
-                            col.parts.forEach(it => indexNumItemTorrents(it, it.media_type || 'movie'))
+                            col.parts.forEach(it => indexNumItemTorrents(it, it.media_type || defaultMediaType))
                         }
                     })
                 }
@@ -989,11 +1076,20 @@ function fetchNumJson(url) {
 
 function preloadNumFeeds() {
     setTimeout(() => {
-        fetchNumJson(NUM_FEEDS.num_4k_uhd.url)
-        fetchNumJson(NUM_AI_COLLECTIONS_URL).then(list => {
+        fetchNumJson(NUM_FEEDS.num_4k_uhd.url, 'movie')
+        fetchNumJson(NUM_AI_COLLECTIONS_URL, 'movie').then(list => {
             if (Array.isArray(list)) numAiCollectionsCache = list
         })
-    }, 500)
+    }, 350)
+
+    setTimeout(() => {
+        fetchNumJson(NUM_FEEDS.num_movies_new.url, 'movie')
+        fetchNumJson(NUM_FEEDS.num_tv_new.url, 'tv')
+        fetchNumJson(NUM_FEEDS.num_legends.url, 'movie')
+        fetchNumJson(NUM_FEEDS.num_cartoons.url, 'movie')
+        fetchNumJson(NUM_FEEDS.num_cartoons_tv.url, 'tv')
+        fetchNumJson(NUM_FEEDS.num_anime.url, 'tv')
+    }, 1200)
 }
 
 preloadNumFeeds()
@@ -1011,6 +1107,8 @@ function getNumTorrentsForCard(card = {}) {
         rawList = numTorrentsByTmdbId[key]
     } else if (id && numTorrentsByTmdbId['movie_' + id]) {
         rawList = numTorrentsByTmdbId['movie_' + id]
+    } else if (id && numTorrentsByTmdbId['tv_' + id]) {
+        rawList = numTorrentsByTmdbId['tv_' + id]
     }
 
     if (!rawList.length) return []
@@ -1020,7 +1118,8 @@ function getNumTorrentsForCard(card = {}) {
     let year = ((card.release_date || card.first_air_date || '') + '').slice(0, 4)
 
     return rawList.map(t => {
-        let combinedMeta = (t.name || '') + ' ' + String(t.link || '').replace(/[-_/]/g, ' ')
+        let linkStr = String(t.link || '')
+        let combinedMeta = (t.name || '') + ' ' + linkStr.replace(/[-_/]/g, ' ')
         let qInfo = classifyTorrentQuality(combinedMeta, t.quality)
         let vInfo = classifyTorrentVoice(combinedMeta, t.voice)
         let isoDate = parseNumDateToIso(t.date)
@@ -1031,11 +1130,21 @@ function getNumTorrentsForCard(card = {}) {
             if (voiceArr.indexOf(s) === -1) voiceArr.push(s)
         })
 
+        let seasonTag = ''
+        let sRangeMatch = linkStr.match(/-s(\d{1,2})-(\d{1,2})(?=-|$)/i)
+        let sSingleMatch = !sRangeMatch && linkStr.match(/-s(\d{1,2})(?=-|$)/i)
+        if (sRangeMatch) {
+            seasonTag = ' [S' + sRangeMatch[1] + '-' + sRangeMatch[2] + ']'
+        } else if (sSingleMatch) {
+            seasonTag = ' [S' + sSingleMatch[1] + ']'
+        }
+
         let rawName = String(t.name || card.title || card.name || '').trim()
         let displayTitle = rawName
         if (rawName.length < 45 && rawName.indexOf('2160') === -1 && rawName.indexOf('1080') === -1) {
             displayTitle = rawName +
                 (orig && orig !== rawName && rawName.indexOf(orig) === -1 ? ' / ' + orig : '') +
+                seasonTag +
                 (year && year.length === 4 ? ' (' + year + ')' : '') +
                 ' [' + qInfo.label +
                 (qInfo.isDv && qInfo.label.indexOf('DV') === -1 ? ' • Dolby Vision' : '') +
@@ -1061,7 +1170,7 @@ function getNumTorrentsForCard(card = {}) {
             num_voice_code: vInfo.code,
             num_voice_label: vInfo.tierLabel,
             info: {
-                quality: qInfo.is4k ? 2160 : (qInfo.code >= 200 ? 1080 : 720),
+                quality: qInfo.is4k ? 2160 : (qInfo.code >= 200 ? 1080 : (qInfo.code >= 100 ? 720 : 480)),
                 voices: voiceArr
             },
             checked_at,
@@ -1532,7 +1641,7 @@ function pickBestTorrent(items = [], mode = 'best') {
     let scored = items.map(item => {
         let rawTitle = (item.Title || item.title || '') + ''
         let seeds = Number(item.Seeders || item.seeders || item.Seeds || 0)
-        let qInfo = classifyTorrentQuality(rawTitle, item.num_quality_code)
+        let qInfo = classifyTorrentQuality(rawTitle, item.num_quality_code, item.info, item.ffprobe)
         let vInfo = classifyTorrentVoice(rawTitle, item.num_voice_code)
         let junk = isJunkTorrent(rawTitle)
 
@@ -1601,7 +1710,9 @@ export default {
     NUM_AI_COLLECTIONS_URL,
     fetchNumJson,
     getNumTorrentsForCard,
-    getNumAiCollectionsCatalog
+    getNumAiCollectionsCatalog,
+    normalizeSearchQuery,
+    searchNumReleases
 }
 
 

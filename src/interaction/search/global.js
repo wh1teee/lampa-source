@@ -171,7 +171,7 @@ function createKeyboard(){
     })
 
     keyboard.listener.follow('hover',()=>{
-        input.length <= 2 ? sources.cancel() : sources.search(input)
+        if(input.trim().length < 2) sources.cancel()
     })
 
     keyboard.listener.follow('back',destroy)

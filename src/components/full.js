@@ -22,6 +22,7 @@ import Permit from '../core/account/permit'
 import TMDB from '../core/api/sources/tmdb'
 import VPN from '../core/vpn'
 import Keys from '../core/tmdb/keys'
+import Parser from '../core/api/sources/parser'
 
 let components = {
     start: Start,
@@ -54,6 +55,10 @@ function component(object){
             this.rows = ['start', 'description']
 
             this.html.addClass('layer--wheight')
+
+            if(Storage.field('parser_use') && object.card && object.card.id && (object.card.title || object.card.name) && Parser && Parser.prefetch){
+                Parser.prefetch(Object.assign({ genres: [] }, object.card))
+            }
 
             Api.full(object, (data)=>{
                 if(!data.movie) return this.emit('error', {empty: true})
@@ -236,6 +241,13 @@ function component(object){
                 if(this.items.length) this.items[0].emit('groupButtons')
 
                 this.activity.toggle()
+
+                // Спекулятивная предзагрузка торрентов в фоне (SWR кэш), чтобы переход в «Торренты» занимал 0 мс
+                if(watch && !adult_block && Storage.field('parser_use') && Parser && Parser.prefetch){
+                    setTimeout(()=>{
+                        Parser.prefetch(data.movie)
+                    }, 150)
+                }
 
             }, this.emit.bind(this, 'error'))
         },
