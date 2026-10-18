@@ -1,24 +1,69 @@
 # Lampa
+Forked from [yumata/lampa-source](https://github.com/yumata/lampa-source)
 
-Все исходники приложения **lampa**, всем желающим прошу до хаты :)
+## Install & Run
 
-Приветствуется ваши идеи и правки в коде, сделаем вместе приложение еще лучше!
+```bash
+git clone https://github.com/androschuk/lampa-source.git
+cd lampa-source
+npm install
+npm run start
+```
 
-MSX версия тут: https://github.com/yumata/lampa
+## Run the prebuilt image from Docker Hub
 
-## Как запустить
+A prebuilt production image is available on Docker Hub: https://hub.docker.com/r/androschuk/lampa
 
-Открываем CMD и запускаем команду `npm install`
+You can run it directly:
 
-Затем запускаем команду `npm run start`
+```bash
+docker run -d \
+  --name lampa \
+  --restart unless-stopped \
+  -p 8080:80 \
+  androschuk/lampa
+```
 
-Открываем браузер и вводим адрес `http://localhost:3000`
+## Run with Docker
 
-## Документация
+This project includes a multi-stage Dockerfile and a `docker-compose.yml` to build the application and serve the built static files with nginx.
 
-В приложении появилась документация, которая будет постоянно обновляться и дополняться. Выполните команду `npm run doc` затем перейдите в папку `build/doc` и откройте файл `index.html`
+### Build and start (production)
 
-И техническая документация от ИИ с обновлением раз в неделю [![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/yumata/lampa-source)
+```bash
+# Build image and run container
+docker compose build
+docker compose up -d
+```
 
-## Переход на версию 3.0
-В версии 3.0 произошли значительные изменения в структуре проекта и кодовой базе. Пожалуйста, ознакомьтесь с [руководством по миграции](UPGRADE.md), чтобы узнать, как обновить ваше приложение до новой версии.
+After the container is up, open your browser and navigate to:
+
+`http://localhost:8080`
+
+(Adjust the host port if you changed `docker-compose.yml`.)
+
+### Stop and remove containers
+
+```bash
+docker compose down
+```
+
+### Verify and troubleshooting
+
+- View container logs: `docker compose logs -f`
+- Check that the built files are present in the container: `docker compose exec lampa ls -la /usr/share/nginx/html`
+- If you changed ports in `docker-compose.yml`, use the mapped host port instead of `8080`.
+
+## Documentation
+
+Internal documentation can be generated locally:
+```bash
+npm run doc
+```
+AI documentation  [![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/androschuk/lampa-source)
+
+
+## Upgrade to Version 3.0
+
+Version 3.0 introduces significant changes to the project structure and codebase. Please refer to the [migration guide](UPGRADE.md)
+ to learn how to update your application to the new version.

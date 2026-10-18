@@ -1,3 +1,5 @@
+@use '../abstracts' as *;
+
 .ad-countdown{
     display: flex;
     background-color: $bg_transparent;

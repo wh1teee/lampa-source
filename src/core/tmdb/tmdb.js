@@ -19,7 +19,7 @@ function proxy(name){
  * @return {string} Проксированный URL запроса
  */
 function api(url){
-    let base  = Utils.protocol() + 'api.themoviedb.org/3/' + url
+    let base  = 'https://api.themoviedb.org/3/' + url
 
     return Storage.field('proxy_tmdb') && Storage.field('tmdb_proxy_api') ? proxy('tmdb_proxy_api') + '/' + base : base
 }
@@ -30,7 +30,7 @@ function api(url){
  * @return {string} Проксированный URL изображения
  */
 function image(url){
-    let base  = Utils.protocol() + 'image.tmdb.org/' + url
+    let base  = 'https://image.tmdb.org/' + url
 
     return Storage.field('proxy_tmdb') && Storage.field('tmdb_proxy_image') ? proxy('tmdb_proxy_image') + '/' + base : base
 }
