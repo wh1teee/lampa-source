@@ -50,6 +50,7 @@ import Api from './core/api/api'
 import Info from './interaction/info_old'
 import Card from './interaction/card'
 import Account from './core/account/account'
+import CubPro from './core/cub_pro'
 import Plugins from './core/plugins'
 import Socket from './core/socket'
 import Recomends from './core/recomend'
@@ -316,6 +317,7 @@ function initClass(){
         Card,
         Info,
         Account,
+        CubPro,
         Socket,
         Input,
         Screensaver,

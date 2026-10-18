@@ -163,7 +163,7 @@ function Collection(data, params = {}){
      */
     this.visible = function(){
         this.img.src  = Lampa.Api.img(data.backdrop_path, 'w500')
-        this.icon.src = Lampa.Utils.protocol() + Lampa.Manifest.cub_domain + '/img/profiles/' + data.icon + '.png'
+        this.icon.src = './img/profiles/' + (data.icon || 'l_1') + '.png'
 
         if(this.onVisible) this.onVisible(this.item, data)
     }

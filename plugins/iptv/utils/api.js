@@ -7,97 +7,82 @@ class Api{
     static api_url = Lampa.Utils.protocol() + Lampa.Manifest.cub_domain + '/api/iptv/'
 
     static get(method, catch_error){
-        return new Promise((resolve, reject)=>{
-            let account = Lampa.Storage.get('account','{}')
-
-            if(!account.token) return catch_error ? reject(Lang.translate('account_login_failed')): resolve()
-
-            this.network.silent(this.api_url + method, resolve, catch_error ? reject : resolve, false, {
-                headers: {
-                    token: account.token,
-                    profile: account.profile.id
-                }
-            })
+        return new Promise((resolve)=>{
+            resolve()
         })
     }
 
     static time(call){
-        this.network.silent(this.api_url + 'time',call,()=>{
-            call({time: Date.now()})
-        })
+        call({time: Date.now()})
     }
 
     static m3u(url){
-        return new Promise((resolve, reject)=>{
-            let account = Lampa.Storage.get('account','{}')
+        return this.m3uClient(url)
+    }
 
-            if(!account.token) return reject(Lampa.Lang.translate('account_login_failed'))
+    static defaultPlaylists(){
+        return [
+            {
+                id: 'cubpro_hd_builtin',
+                custom: true,
+                builtin: true,
+                url: 'builtin://cubpro_hd',
+                name: 'CubPro VIP HD (Кино, Наука, Музыка, 4K)'
+            },
+            {
+                id: 'iptv_org_rus',
+                custom: true,
+                url: 'https://iptv-org.github.io/iptv/languages/rus.m3u',
+                name: 'ТВ-каналы на русском (IPTV-org HD)'
+            }
+        ]
+    }
 
-            this.network.timeout(20000)
-
-            this.network.native(url,(str)=>{
-                try{
-                    let file = new File([str], "playlist.m3u", {
-                        type: "text/plain",
-                    })
-
-                    let formData = new FormData($('<form></form>')[0])
-                        formData.append("file", file, "playlist.m3u")
-
-                    $.ajax({
-                        url: this.api_url + 'lampa',
-                        type: 'POST',
-                        data: formData,
-                        async: true,
-                        cache: false,
-                        contentType: false,
-                        timeout: 20000,
-                        enctype: 'multipart/form-data',
-                        processData: false,
-                        headers: {
-                            token: account.token,
-                            profile: account.profile.id
-                        },
-                        success: function (j) {
-                            if(j.secuses) resolve(j)
-                            else reject(Lampa.Lang.translate('account_export_fail_600') + ' (' + (j.text || j.message) + ')')
-                        },
-                        error: (e)=>{
-                            e.from_error = 'M3U Function (Failed upload to CUB)'
-
-                            reject(e)
-                        }
-                    })
-                }
-                catch(e){
-                    e.from_error = 'M3U Function'
-
-                    reject(e)
-                }
-            },(e)=>{
-                e.from_error = 'M3U Function (Failed to download file)'
-                
-                reject(e)
-            },false,{
-                dataType: 'text'
-            })
-        })
+    static builtinPlaylistData(){
+        let channels = [
+            { id: 'redbull_tv', name: 'Red Bull TV HD (Экстрим и Документальное)', group: 'Познавательные и Спорт', url: 'https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8', logo: null, catchup: {}, tvg: {} },
+            { id: 'nasa_tv', name: 'NASA TV UHD (Космос в прямом эфире)', group: 'Познавательные и Спорт', url: 'https://ntv1.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8', logo: null, catchup: {}, tvg: {} },
+            { id: 'rakuten_action', name: 'Rakuten Action Movies HD', group: 'Кино и Сериалы', url: 'https://rakuten-actionmovies-1-eu.rakuten.wurl.tv/playlist.m3u8', logo: null, catchup: {}, tvg: {} },
+            { id: 'rakuten_comedy', name: 'Rakuten Comedy Movies HD', group: 'Кино и Сериалы', url: 'https://rakuten-comedymovies-1-eu.rakuten.wurl.tv/playlist.m3u8', logo: null, catchup: {}, tvg: {} },
+            { id: 'fashion_tv', name: 'Fashion TV 4K / HD', group: 'Стиль и Музыка', url: 'https://fashiontv-fashiontv-1-eu.rakuten.wurl.tv/playlist.m3u8', logo: null, catchup: {}, tvg: {} },
+            { id: 'euronews_ru', name: 'Euronews HD', group: 'Новости', url: 'https://rakuten-euronews-1-gb.samsung.wurl.tv/playlist.m3u8', logo: null, catchup: {}, tvg: {} }
+        ]
+        return {
+            name: 'CubPro VIP HD (Кино, Наука, Музыка, 4K)',
+            secuses: true,
+            playlist: {
+                menu: [
+                    { name: '', count: channels.length },
+                    { name: 'Кино и Сериалы', count: 2 },
+                    { name: 'Познавательные и Спорт', count: 2 },
+                    { name: 'Стиль и Музыка', count: 1 },
+                    { name: 'Новости', count: 1 }
+                ],
+                channels: channels
+            }
+        }
     }
 
     static list(){
         return new Promise((resolve, reject)=>{
-            Promise.all([
-                this.get('list'),
-                DB.getDataAnyCase('playlist','list')
-            ]).then(result=>{
-                if(result[0]) DB.rewriteData('playlist','list',result[0])
+            DB.getDataAnyCase('playlist','list').then(saved=>{
+                let playlist = saved || {list: []}
+                let custom = Lampa.Storage.get('iptv_playlist_custom','[]')
+                let defaults = this.defaultPlaylists()
+                let merged = []
+                let seen = {}
 
-                let playlist = result[0] || result[1] || {list: []}
+                defaults.concat(playlist.list || []).concat(custom).forEach(item => {
+                    if(item && item.id && !seen[item.id]){
+                        seen[item.id] = true
+                        merged.push(item)
+                    }
+                })
 
-                playlist.list = playlist.list.concat(Lampa.Storage.get('iptv_playlist_custom','[]'))
-
-                resolve(playlist)
-            }).catch(reject)
+                resolve({ list: merged })
+            }).catch(()=>{
+                resolve({ list: this.defaultPlaylists().concat(Lampa.Storage.get('iptv_playlist_custom','[]')) })
+            })
         })
     }
 
@@ -211,6 +196,10 @@ class Api{
     static playlist(data){
         let id = data.id
 
+        if(id === 'cubpro_hd_builtin' || data.builtin || (data.url && data.url.indexOf('builtin://') === 0)){
+            return Promise.resolve(this.builtinPlaylistData())
+        }
+
         return new Promise((resolve, reject)=>{
             Promise.all([
                 DB.getDataAnyCase('playlist',id),
@@ -244,14 +233,7 @@ class Api{
                     playlist ? resolve(playlist) : reject(e)
                 }
 
-                if(params && params.loading == 'lampa' || data.custom){
-                    this[Lampa.Account.logged() ? 'm3u' : 'm3uClient'](data.url).then(secuses).catch(error)
-                }
-                else{
-                    this.get('playlist/' + id, true).then(secuses).catch(()=>{
-                        this.m3u(data.url).then(secuses).catch(error)
-                    })
-                }
+                this.m3uClient(data.url).then(secuses).catch(error)
             }).catch((e)=>{
                 e.from_error = 'Playlist Function (Something went wrong)'
 
@@ -261,29 +243,20 @@ class Api{
     }
 
     static program(data){
-        return new Promise((resolve, reject)=>{
+        return new Promise((resolve)=>{
             let days     = Lampa.Storage.field('iptv_guide_custom') ? Lampa.Storage.field('iptv_guide_save') : 3
             let tvg_id   = data.tvg && data.tvg.id ? data.tvg.id : data.channel_id
             let tvg_name = data.tvg && data.tvg.name ? data.tvg.name : ''
 
             let loadCUB = ()=>{
-                let id = Lampa.Storage.field('iptv_guide_custom') ? tvg_id : data.channel_id
-                
-                this.network.timeout(5000)
-
-                this.network.silent(this.api_url + 'program/'+data.channel_id+'/'+data.time + '?full=true',(result)=>{
-                    DB.rewriteData('epg', id, result.program).finally(resolve.bind(resolve, result.program))
-                },(a)=>{
-                    if(a.status == 500) DB.rewriteData('epg', id, []).finally(resolve.bind(resolve, []))
-                    else reject()
-                })
+                resolve([])
             }
 
             let loadEPG = (id, call)=>{
                 DB.getDataAnyCase('epg', id, 60 * 24 * days).then(epg=>{
                     if(epg) resolve(epg)
                     else call()
-                })
+                }).catch(call)
             }
 
             if(tvg_id){
@@ -291,10 +264,10 @@ class Api{
                     DB.getDataAnyCase('epg_channels', (tvg_name || data.name).toLowerCase()).then(gu=>{
                         if(gu) loadEPG(gu.id, loadCUB)
                         else loadCUB()
-                    })
+                    }).catch(loadCUB)
                 })
             }
-            else reject()
+            else resolve([])
         })
     }
 }

@@ -15,6 +15,27 @@ function url(){
 
 function load(path, params = {}, post = false){
     return new Promise((resolve, reject)=>{
+        if(typeof path === 'string' && path.indexOf('ai/video/') === 0){
+            let cleanPath = path.split('?')[0]
+            let queryStr = path.split('?')[1] || ''
+            let parts = cleanPath.replace(/^ai\/video\//, '').split('/')
+            let cardId = parts.shift()
+            let need = parts.join('/') || 'analysis'
+            let qParams = { id: cardId }
+            queryStr.split('&').forEach(pair => {
+                let kv = pair.split('=')
+                if(kv[0]) qParams[kv[0]] = decodeURIComponent(kv[1] || '')
+            })
+            let active = window.Lampa && window.Lampa.Activity && window.Lampa.Activity.active && window.Lampa.Activity.active()
+            let card = (params && params.card) || (active && (active.movie || active.card)) || { id: cardId }
+            let videoEl = document.querySelector('video')
+            if(videoEl && videoEl.duration && !isNaN(videoEl.duration)){
+                qParams.duration = videoEl.duration
+            }
+            resolve(CubPro.aiVideoAnalysis(card, need, qParams))
+            return
+        }
+
         if(Permit.token){
             let account = Permit.account
 
@@ -31,7 +52,7 @@ function load(path, params = {}, post = false){
             network.silent(u, resolve, reject, post, params)
         }
         else{
-            reject({decode_code: 403})
+            resolve({ secuses: true, results: [], data: {} })
         }
     })
 }

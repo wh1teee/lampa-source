@@ -18,7 +18,7 @@ function component(object){
             Lampa.Activity.push({
                 url: element.id,
                 title: element.title,
-                component: 'cub_collection',
+                component: 'cub_collections_view',
                 page: 1
             })
         }

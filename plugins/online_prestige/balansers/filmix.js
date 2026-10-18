@@ -173,7 +173,7 @@ function filmix(component, _object){
                         ++epis_num
 
                         let quality_eps = file_episod.qualities.filter(function (qualitys) {
-                            return qualitys <= window.filmix.max_qualitie
+                            return Boolean(qualitys)
                         })
 
                         let max_quality = Math.max.apply(null, quality_eps)
@@ -222,7 +222,7 @@ function filmix(component, _object){
                 let quality_eps = file_episod.link.match(/.+\[(.+[\d]),?\].+/i)
 
                 if (quality_eps) quality_eps = quality_eps[1].split(',').filter(function (quality_) {
-                    return quality_ <= window.filmix.max_qualitie
+                    return Boolean(quality_)
                 })
 
                 let max_quality = Math.max.apply(null, quality_eps)

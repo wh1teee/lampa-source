@@ -137,26 +137,18 @@ function start(data){
 
     play_data.card = data.card || Activity.active().movie || Activity.active().card
 
-    let possibly = Account.hasPremium() || false
+    let possibly = true
     let type     = play_data.card?.original_name ? 'tv' : 'movie'
 
     if(data.iptv || data.youtube) possibly = false
-    else if(!Permit.token) possibly = false
-    else if(type == 'tv' && (!data.season || !data.episode)) possibly = false
-
-    if(!Platform.screen('tv')) possibly = false
 
     play_data.type = type
 
     if(possibly){
-        play_data.season     = data.season || 0
-        play_data.episode    = data.episode || 0
+        play_data.season     = data.season || 1
+        play_data.episode    = data.episode || 1
 
-        if(play_data.card){
-            let year = parseInt((play_data.card.release_date || play_data.card.first_air_date || '----').slice(0,4))
-
-            if(year >= 1985) button.removeClass('hide')
-        }
+        button.removeClass('hide')
     }
 
     chat_history.push({

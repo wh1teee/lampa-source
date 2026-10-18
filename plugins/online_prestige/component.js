@@ -984,11 +984,25 @@ function component(object){
         this.loading(false)
     }
 
+    let tried_balansers = {}
+
     this.doesNotAnswer = function(){
         this.reset()
 
+        tried_balansers[balanser] = true
+        let fast_chain = ['collaps', 'kinobase', 'rezka']
+        let next_fast = fast_chain.find(b => !tried_balansers[b] && sources[b])
+
+        if(next_fast){
+            balanser = next_fast
+            if(source && source.destroy) source.destroy()
+            source = new sources[balanser](this, object)
+            this.search()
+            return
+        }
+
         let html = Lampa.Template.get('online_does_not_answer',{balanser})
-        let tic  = 10
+        let tic  = 5
 
         html.find('.cancel').on('hover:enter',()=>{
             clearInterval(balanser_timer)

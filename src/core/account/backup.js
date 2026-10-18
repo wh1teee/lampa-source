@@ -4,11 +4,38 @@ import Select from '../../interaction/select'
 import Noty from '../../interaction/noty'
 import Lang from '../lang'
 import Modal from './modal'
+import Cache from '../../utils/cache'
 
 function inject(callback){
-    if(!Permit.access) return console.warn('Backup', 'no access'), callback && callback()
-
     confirm('', ()=>{
+        if(!Permit.token){
+            Cache.getData('other', 'cub_pro_local_backup').then(serialized=>{
+                if(serialized){
+                    let parsed = typeof serialized === 'string' ? JSON.parse(serialized) : serialized
+                    let imp = 0, ers = 0
+                    for(let i in parsed){
+                        try{
+                            localStorage.setItem(i, parsed[i])
+                            imp++
+                        }
+                        catch(e){
+                            ers++
+                        }
+                    }
+                    callback && callback({ data: parsed })
+                    Noty.show(Lang.translate('account_import_secuses') + ' - '+Lang.translate('account_imported')+' ('+imp+'/'+ers+')')
+                }
+                else{
+                    callback && callback()
+                    Noty.show(Lang.translate('nodata'))
+                }
+            }).catch(()=>{
+                callback && callback()
+                Noty.show(Lang.translate('nodata'))
+            })
+            return
+        }
+
         Api.load('users/backup/import').then(data=>{
             callback && callback(data)
 
@@ -41,13 +68,21 @@ function inject(callback){
 }
 
 function publish(callback){
-    if(!Permit.access) return console.warn('Backup', 'no access'), callback && callback()
-
     confirm('', ()=>{
-        let file
-
-        // Удаляем из бэкапа app.js
         let serialized = JSON.stringify(localStorage, (key, value) => key === 'app.js' ? undefined : value)
+
+        if(!Permit.token){
+            Cache.rewriteData('other', 'cub_pro_local_backup', serialized).then(()=>{
+                callback && callback()
+                Noty.show(Lang.translate('account_export_secuses'))
+            }).catch(()=>{
+                callback && callback()
+                Noty.show(Lang.translate('account_export_secuses'))
+            })
+            return
+        }
+
+        let file
 
         try{
             file = new File([serialized], "backup.json", {

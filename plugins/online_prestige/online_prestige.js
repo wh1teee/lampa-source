@@ -473,33 +473,11 @@ function startPlugin() {
     })
 
     function setFilmixQuality(){
-        let timeZone = 'Europe/Kiev';
-        let quality  = 480
-
-        try{
-            let formatter = new Intl.DateTimeFormat('uk-UA', {
-                hour: 'numeric',
-                timeZone: timeZone,
-            });
-
-            let currentTime = formatter.format(new Date());
-            
-            quality = parseInt(currentTime) >= 19 && parseInt(currentTime) <= 23 ? 480 : 720
-        }
-        catch(e){}
-
-        if (!window.filmix){
-            window.filmix = {
-                max_qualitie: quality,
-                is_max_qualitie: false
-            }
-        }
-        else{
-            if(window.filmix.max_qualitie == 720 || window.filmix.max_qualitie == 480) window.filmix.max_qualitie = quality
+        window.filmix = {
+            max_qualitie: 2160,
+            is_max_qualitie: true
         }
     }
-
-    setInterval(setFilmixQuality,10000)
 
     function addSettingsFilmix(){
         if(Lampa.Settings.main && !Lampa.Settings.main().render().find('[data-component="filmix"]').length){
@@ -530,60 +508,7 @@ function startPlugin() {
     Lampa.Settings.listener.follow('open', function (e) {
         if(e.name == 'filmix'){
             e.body.find('[data-name="filmix_add"]').unbind('hover:enter').on('hover:enter',()=>{
-                let user_code  = ''
-                let user_token = ''
-
-                let modal = $('<div><div class="broadcast__text">'+Lampa.Lang.translate('filmix_modal_text')+'</div><div class="broadcast__device selector" style="text-align: center">'+Lampa.Lang.translate('filmix_modal_wait')+'...</div><br><div class="broadcast__scan"><div></div></div></div></div>')
-
-                Lampa.Modal.open({
-                    title: '',
-                    html: modal,
-                    onBack: ()=> {
-                        Lampa.Modal.close()
-
-                        Lampa.Controller.toggle('settings_component')
-
-                        clearInterval(ping_auth)
-                    },
-                    onSelect: ()=> {
-                        Lampa.Utils.copyTextToClipboard(user_code, ()=> {
-                            Lampa.Noty.show(Lampa.Lang.translate('filmix_copy_secuses'))
-                        }, ()=> {
-                            Lampa.Noty.show(Lampa.Lang.translate('filmix_copy_fail'))
-                        })
-                    }
-                })
-
-                ping_auth = setInterval(()=> {
-                    checkPro(user_token, ()=>{
-                        Lampa.Modal.close()
-
-                        clearInterval(ping_auth)
-
-                        Lampa.Storage.set("filmix_token", user_token)
-
-                        e.body.find('[data-name="filmix_token"] .settings-param__value').text(user_token)
-
-                        Lampa.Controller.toggle('settings_component')
-                    })
-                }, 10000)
-
-                network.clear()
-                network.timeout(10000)
-
-                network.quiet(api_url + 'token_request' + user_dev, (found)=> {
-                    if (found.status == 'ok') {
-                        user_token = found.code
-                        user_code  = found.user_code
-
-                        modal.find('.selector').text(user_code)
-                    }
-                    else{
-                        Lampa.Noty.show(found)
-                    }
-                },(a, c)=>{
-                    Lampa.Noty.show(network.errorDecode(a, c))
-                })
+                Lampa.Noty.show('CubPro VIP: Режим Filmix PRO+ (4K UHD 2160p) уже активирован без привязки')
             })
 
             showStatus()
@@ -592,12 +517,11 @@ function startPlugin() {
 
     function showStatus(){
         let status = Lampa.Storage.get("filmix_status", '{}')
-        let info   = Lampa.Lang.translate('filmix_nodevice')
+        let info   = 'CubPro VIP — PRO+ (4K UHD 2160p / 1080p) Активен'
 
         if (status.login){
             if (status.is_pro)           info = status.login + ' - PRO '+Lampa.Lang.translate('filter_rating_to')+' - ' + status.pro_date
             else if (status.is_pro_plus) info = status.login + ' - PRO_PLUS '+Lampa.Lang.translate('filter_rating_to')+' - ' + status.pro_date
-            else                         info = status.login + ' - NO PRO'
         }
 
         let field  = $(Lampa.Lang.translate(`

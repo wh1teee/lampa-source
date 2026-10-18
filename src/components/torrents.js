@@ -25,6 +25,8 @@ import TitleParser from './torrents/parser'
 
 import voices from './torrents/voices'
 import filter_langs from './torrents/lang'
+import CubPro from '../core/cub_pro'
+
 
 /**
  * Компонент "Torrents"
@@ -713,6 +715,18 @@ function component(object){
             scroll.append(history.render(true))
 
             this.append(filtred.slice(0,20))
+
+            if(object.auto_play_mode && !this.auto_played){
+                this.auto_played = true
+                let best = CubPro.pickBestTorrent(filtred, object.auto_play_mode)
+                if(best){
+                    best.poster = object.movie.img
+                    setTimeout(()=>{
+                        Noty.show('⚡ Автовыбор: ' + Utils.shortText(best.Title || best.title || '', 55))
+                        Torrent.start(best, object.movie)
+                    }, 120)
+                }
+            }
         }
         else{
             if(results.Results.length) this.listEmpty()

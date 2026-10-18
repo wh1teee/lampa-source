@@ -1,6 +1,8 @@
 import Arrays from '../../utils/arrays'
 import Subscribe from '../../utils/subscribe'
 import Player from '../player'
+import CubPro from '../../core/cub_pro'
+import Storage from '../../core/storage/storage'
 
 let listener = Subscribe()
 let segments = {
@@ -17,7 +19,15 @@ let ref_duration = 0
 let skip_preview_lead = 5
 
 function init(){
+    if(!Storage.get('player_segments_skip', '')){
+        Storage.set('player_segments_skip', 'user')
+    }
+
     Player.listener.follow('start', (data)=>{
+        if(!data.segments && !data.iptv && !data.youtube){
+            let autoSegs = CubPro.getPlayerSegments(data)
+            if(autoSegs) data.segments = autoSegs
+        }
         if(data.segments) set(data.segments)
     })
 
