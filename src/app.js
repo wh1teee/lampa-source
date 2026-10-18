@@ -448,8 +448,6 @@ function developerApp(proceed){
 
     let timer   = setTimeout(()=>{
         expect  = false
-
-        proceed()
     }, 1000)
 
     let check = ()=>{
@@ -464,8 +462,6 @@ function developerApp(proceed){
 
             Developer.open(()=>{
                 Keypad.disable()
-
-                proceed()
             })
 
             console.log('Developer mode','on')
@@ -486,6 +482,8 @@ function developerApp(proceed){
     })
 
     window.addEventListener("keydown", keydown)
+
+    proceed()
 }
 
 /**
@@ -734,11 +732,11 @@ function startApp(){
  */
 function showApp(){
     LoadingProgress.status('Show app')
-    
-    // Скрытие логотипа
-    setTimeout(()=>{
-        if(window.show_app) return
 
+    // Старт приложения синхронно без искусственной 1500ms задержки
+    startApp()
+
+    if(!window.show_app){
         window.show_app = true
 
         LoadingProgress.destroy()
@@ -747,99 +745,50 @@ function showApp(){
 
         Screensaver.enable()
 
-        $('.welcome').fadeOut(500,()=>{
-            $(this).remove()
-        })
-    },1000)
-
-    // Старт приложения
-    startApp()
+        $('.welcome').remove()
+    }
 }
 
 /**
- * Приоритетная загрузка
+ * Приоритетная загрузка (Instant Local-First Start + Фоновая ревалидация)
  */
 function loadTask(){
-    Task.queue((next)=>{
-        LoadingProgress.status('Open cache database')
+    // 1. Синхронно (0 мс) инициализируем гео/TMDB-прокси из кэша Storage
+    VPN.task(()=>{})
 
+    // 2. Авто-миграция устаревшего адреса Jackett
+    let tsl1 = window.localStorage.getItem('jackett_url') || ''
+    let tsl2 = window.localStorage.getItem('jackett_url_two') || ''
+
+    try{
+        if(tsl1.toLowerCase() == 'jacred.xyz'){
+            window.localStorage.setItem('jackett_url', 'jac.red')
+        }
+
+        if(tsl2.toLowerCase() == 'jacred.xyz'){
+            window.localStorage.setItem('jackett_url_two', 'jac.red')
+        }
+    }
+    catch(e){}
+
+    // 3. Мгновенно запускаем рендер приложения (0 мс ожидания сети)
+    showApp()
+
+    // 4. Открываем IndexedDB и выполняем фоновую синхронизацию зеркал, плагинов и аккаунта
+    setTimeout(()=>{
         Cache.openDatabase().then(()=>{
             console.log('Cache', 'worked')
-
-            next()
+            Storage.task(()=>{})
         }).catch(()=>{
             console.log('Cache', 'error', 'no open database')
-
-            next()
         })
-    })
 
-    Task.queue((next)=>{
-        LoadingProgress.status('Storage load reserve')
-        
-        Storage.task(next)
-    })
-
-    Task.queue((next)=>{
-        LoadingProgress.status('Mirrors initialization')
-
-        LoadingProgress.step(2)
-
-        Mirrors.task(next)
-    })
-
-    Task.queue((next)=>{
-        LoadingProgress.status('Plugins initialization')
-
-        LoadingProgress.step(3)
-
-        Plugins.task(next)
-    })
-
-    Task.queue((next)=>{
-        LoadingProgress.status('Proxy initialization')
-
-        LoadingProgress.step(4)
-
-        VPN.task(next)
-    })
-
-    Task.queue((next)=>{
-        LoadingProgress.status('Account initialization')
-
-        LoadingProgress.step(5)
-
-        Account.task(next)
-    })
-
-    Task.secondary(()=>{
-        setTimeout(showApp, 5000)
-    })
-
-    // todo: потом удалить, это костыль для исправления старых адресов джакетта 
-    Task.secondary(()=>{
-        let tsl1 = window.localStorage.getItem('jackett_url') || ''
-        let tsl2 = window.localStorage.getItem('jackett_url_two') || ''
-
-        try{
-            if(tsl1.toLowerCase() == 'jacred.xyz'){
-                window.localStorage.setItem('jackett_url', 'jac.red')
-            }
-
-            if(tsl2.toLowerCase() == 'jacred.xyz'){
-                window.localStorage.setItem('jackett_url_two', 'jac.red')
-            }
-        }
-        catch(e){}
-    })
-
-    Task.secondary(()=>{
-        LoadingProgress.status('Loading plugins')
-
-        Plugins.load(showApp)
-    })
-
-    Task.start()
+        Mirrors.task(()=>{})
+        Plugins.task(()=>{
+            Plugins.load(()=>{})
+        })
+        Account.task(()=>{})
+    }, 10)
 }
 
 /**

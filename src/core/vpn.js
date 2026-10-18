@@ -63,40 +63,45 @@ let extract = (call, error)=>{
 function task(call){
     if(!window.lampa_settings.geo) return call && call()
 
-    extract((country)=>{
-        console.log('VPN', 'geo.' + Manifest.cub_domain + ' domain responding ', country)
+    let reg = Storage.get('region','{}')
+    let cached_country = (reg && reg.code) ? (reg.code + '').trim().toLowerCase() : 'ru'
 
-        country = country.trim().toLowerCase()
-        
-        if(country.length > 10){
-            country = 'ru'
+    if((cached_country == 'ru' || cached_country == 'by' || cached_country == '' || cached_country.length > 10) && !window.lampa_settings.disable_features.install_proxy){
+        TMDBProxy.init()
+    }
 
-            console.warn('VPN', 'wrong responce, use default ru')
-        } 
+    responce_code = cached_country || 'ru'
+    window.vpn_region = responce_code
 
-        if((country == 'ru' || country == 'by' || country == '' || country.length > 10) && !window.lampa_settings.disable_features.install_proxy){
-            console.log('VPN', 'launch TMDB Proxy')
+    if(call) call()
 
-            TMDBProxy.init()
-        }
+    if(reg && reg.code && reg.time && (reg.time + 1000*60*60*24 > Date.now())){
+        return
+    }
 
-        responce_code = country || 'ru'
+    setTimeout(()=>{
+        extract((country)=>{
+            console.log('VPN', 'geo.' + Manifest.cub_domain + ' domain responding ', country)
 
-        // Для совместимости с Manifest.cub_domain
-        window.vpn_region = responce_code
+            country = (country + '').trim().toLowerCase()
+            
+            if(country.length > 10){
+                country = 'ru'
+            } 
 
-        call()
-    }, (e,x)=>{
-        console.warn('VPN', 'geo.' + Manifest.cub_domain + ' domain not responding:', network.errorDecode(e,x))
+            Storage.set('region',{
+                code: country || 'ru',
+                time: Date.now()
+            })
 
-        if(!window.lampa_settings.disable_features.install_proxy){
-            console.log('VPN', 'launch TMDB Proxy')
+            if((country == 'ru' || country == 'by' || country == '') && !window.lampa_settings.disable_features.install_proxy){
+                TMDBProxy.init()
+            }
 
-            TMDBProxy.init() //будем считать что если не ответил, то все равно запускаем
-        }
-
-        call()
-    })
+            responce_code = country || 'ru'
+            window.vpn_region = responce_code
+        }, ()=>{})
+    }, 50)
 }
 
 function is(need_array = []){
