@@ -572,7 +572,7 @@ function startApp(){
     Helper.init()
     LoadingProgress.status('Helper init')
 
-    Tizen.init()
+    if(Platform.is('tizen')) Tizen.init()
     LoadingProgress.status('Tizen init')
 
     Player.init()
@@ -584,7 +584,7 @@ function startApp(){
     Parser.init()
     LoadingProgress.status('Parser init')
 
-    WebOSLauncher.init()
+    if(Platform.is('webos')) WebOSLauncher.init()
     LoadingProgress.status('WebOSLauncher init')
 
     Theme.init()
@@ -596,15 +596,6 @@ function startApp(){
     NavigationBar.init()
     LoadingProgress.status('NavigationBar init')
 
-    Demo.init()
-    LoadingProgress.status('Demo init')
-
-    Speedtest.init()
-    LoadingProgress.status('Speedtest init')
-
-    Processing.init()
-    LoadingProgress.status('Processing init')
-
     ParentalControl.init()
     LoadingProgress.status('ParentalControl init')
 
@@ -613,15 +604,6 @@ function startApp(){
 
     Sound.init()
     LoadingProgress.status('Sound init')
-
-    Iptv.init()
-    LoadingProgress.status('Iptv init')
-
-    Logs.init()
-    LoadingProgress.status('Logs init')
-
-    Broadcast.init()
-    LoadingProgress.status('Broadcast init')
 
     Search.init()
     LoadingProgress.status('Search init')
@@ -638,25 +620,6 @@ function startApp(){
 
     LoadingProgress.status('Initialization successful')
 
-    // Выводим информацию о приложении
-
-    let ratio = window.devicePixelRatio || 1
-
-    console.log('App','screen size:', Math.round(window.innerWidth * ratio) + ' / ' + Math.round(window.innerHeight * ratio))
-    console.log('App','interface size:', window.innerWidth + ' / ' + window.innerHeight)
-    console.log('App','pixel ratio:', window.devicePixelRatio)
-    console.log('App','user agent:', navigator.userAgent)
-    console.log('App','touch points:', navigator.maxTouchPoints)
-    console.log('App','is tv:', Platform.screen('tv'))
-    console.log('App','is mobile:', Platform.screen('mobile'))
-    console.log('App','is touch:', Utils.isTouchDevice())
-    console.log('App','is PWA:', Utils.isPWA())
-    console.log('App','platform:', Storage.get('platform', 'noname'))
-    console.log('App','version:', Manifest.app_version)
-    console.log('App','build date:', '{__APP_BUILD__}')
-    console.log('App','hash', '{__APP_HASH__}')
-    console.log('App','location:', location.href)
-
     // Записываем uid
 
     if(!Storage.get('lampa_uid','')) Storage.set('lampa_uid', Utils.uid())
@@ -666,47 +629,6 @@ function startApp(){
     Render.app()
 
     LoadingProgress.status('Render app')
-
-    // Инициализируем остальные сервисы
-
-    ServiceDeveloper.init()
-    LoadingProgress.status('ServiceDeveloper init')
-
-    ServiceTorserver.init()
-    LoadingProgress.status('ServiceTorserver init')
-
-    ServiceWatched.init()
-    LoadingProgress.status('ServiceWatched init')
-
-    ServiceSettings.init()
-    LoadingProgress.status('ServiceSettings init')
-
-    ServiceMetric.init()
-    LoadingProgress.status('ServiceMetric init')
-
-    ServiceRemoteFavorites.init()
-    LoadingProgress.status('ServiceRemoteFavorites init')
-
-    ServiceDMCA.init()
-    LoadingProgress.status('ServiceDMCA init')
-
-    ServiceFPS.init()
-    LoadingProgress.status('ServiceFPS init')
-
-    ServiceEvents.init()
-    LoadingProgress.status('ServiceEvents init')
-
-    ServiceLibs.init()
-    LoadingProgress.status('ServiceLibs init')
-
-    ServiceLGBT.init()
-    LoadingProgress.status('ServiceLGBT init')
-
-    ServiceChildren.init()
-    LoadingProgress.status('ServiceChildren init')
-
-    ServiceRemoteConfiguration.init()
-    LoadingProgress.status('ServiceRemoteConfiguration init')
 
     // Обновляем слои
 
@@ -724,7 +646,32 @@ function startApp(){
 
     window.app_time_end = Date.now()
 
+    console.log('App', 'boot ready in:', (window.app_time_end - window.app_time_start) + 'ms')
+
     Lampa.Listener.send('app',{type:'ready'})
+
+    // Инициализируем фоновые и второстепенные сервисы после первого кадра
+    setTimeout(()=>{
+        Demo.init()
+        Speedtest.init()
+        Processing.init()
+        Iptv.init()
+        Logs.init()
+        Broadcast.init()
+        ServiceDeveloper.init()
+        ServiceTorserver.init()
+        ServiceWatched.init()
+        ServiceSettings.init()
+        ServiceMetric.init()
+        ServiceRemoteFavorites.init()
+        ServiceDMCA.init()
+        ServiceFPS.init()
+        ServiceEvents.init()
+        ServiceLibs.init()
+        ServiceLGBT.init()
+        ServiceChildren.init()
+        ServiceRemoteConfiguration.init()
+    }, 15)
 }
 
 /**
