@@ -100,6 +100,7 @@ function check(url, call){
  */
 function task(call){
     if(!window.lampa_settings.mirrors) return call && call()
+    if(!Storage.get('account','{}').token && !Storage.field('proxy_tmdb')) return call && call()
 
     let status = new Status(protocols.length)
 

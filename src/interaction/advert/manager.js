@@ -5,13 +5,7 @@ import Banner from './banner'
 import Platform from '../../core/platform'
 
 function init(){
-    Premiere.init()
-    Extend.init()
-    
-    if(!Platform.is(['orsay', 'netcast'])){
-        Preroll.init()
-        Banner.init()
-    }
+    // Отключена загрузка сторонней видеорекламы (VAST preroll) и баннеров CUB
 }
 
 export default {

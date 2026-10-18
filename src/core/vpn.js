@@ -64,9 +64,9 @@ function task(call){
     if(!window.lampa_settings.geo) return call && call()
 
     let reg = Storage.get('region','{}')
-    let cached_country = (reg && reg.code) ? (reg.code + '').trim().toLowerCase() : 'ru'
+    let cached_country = (reg && reg.code) ? (reg.code + '').trim().toLowerCase() : (Storage.field('language') || 'ru')
 
-    if((cached_country == 'ru' || cached_country == 'by' || cached_country == '' || cached_country.length > 10) && !window.lampa_settings.disable_features.install_proxy){
+    if(Storage.field('proxy_tmdb') && !window.lampa_settings.disable_features.install_proxy){
         TMDBProxy.init()
     }
 
@@ -74,34 +74,6 @@ function task(call){
     window.vpn_region = responce_code
 
     if(call) call()
-
-    if(reg && reg.code && reg.time && (reg.time + 1000*60*60*24 > Date.now())){
-        return
-    }
-
-    setTimeout(()=>{
-        extract((country)=>{
-            console.log('VPN', 'geo.' + Manifest.cub_domain + ' domain responding ', country)
-
-            country = (country + '').trim().toLowerCase()
-            
-            if(country.length > 10){
-                country = 'ru'
-            } 
-
-            Storage.set('region',{
-                code: country || 'ru',
-                time: Date.now()
-            })
-
-            if((country == 'ru' || country == 'by' || country == '') && !window.lampa_settings.disable_features.install_proxy){
-                TMDBProxy.init()
-            }
-
-            responce_code = country || 'ru'
-            window.vpn_region = responce_code
-        }, ()=>{})
-    }, 50)
 }
 
 function is(need_array = []){

@@ -42,6 +42,7 @@ let timer
 let immed_time  = Date.now()
 let theme_color = '#000000'
 let timer_change
+let fade_raf    = 0
 
 
 /**
@@ -53,22 +54,26 @@ function init(){
     })
 
     let u = Platform.any() ? Manifest.github_lampa : './'
-    if(Platform.is('orsay')){
+    if(Platform.is('orsay') || window.location.protocol == 'file:'){
         u = './'
     }
-    for (let i = 1; i <= 6; i++) {
-        let im = new Image()
-            im.src = u + 'img/bokeh-h/'+i+'.png'
+    setTimeout(()=>{
+        for (let i = 1; i <= 6; i++) {
+            let im = new Image()
+                im.decoding = 'async'
+                im.src = u + 'img/bokeh-h/'+i+'.png'
 
-        bokeh.h.push(im)
-    }
+            bokeh.h.push(im)
+        }
 
-    for (let i = 1; i <= 6; i++) {
-        let im = new Image()
-            im.src = u + 'img/bokeh/'+i+'.png'
+        for (let i = 1; i <= 6; i++) {
+            let im = new Image()
+                im.decoding = 'async'
+                im.src = u + 'img/bokeh/'+i+'.png'
 
-        bokeh.c.push(im)
-    }
+            bokeh.c.push(im)
+        }
+    }, 1500)
 
     background.one.canvas[0].width  = window.screen_width
     background.one.canvas[0].height = window.screen_height
@@ -192,27 +197,19 @@ function draw(data, item, noimage){
  * Плавный переход с двойным прогревом обоих canvas
  */
 function fadeTo(new_bg) {
+    if (fade_raf) cancelAnimationFrame(fade_raf)
+
     const fade      = background.fade.ctx
     const old_image = background[view === 'one' ? 'two' : 'one'].canvas[0]
     const new_image = new_bg.canvas[0]
-    const duration  = 700   // длительность fade
-    const warmup    = 80    // прогрев GPU
-    const start     = Date.now()
+    const duration  = 450   // длительность fade
+    const start     = performance.now()
 
-    function step() {
-        const elapsed = Date.now() - start
-
-        if (elapsed < warmup) {
-            // прогрев: оба слоя с альфой 0
-            fade.globalAlpha = 0
-            fade.drawImage(old_image, 0, 0)
-            fade.drawImage(new_image, 0, 0)
-            requestAnimationFrame(step)
-            return
-        }
+    function step(now) {
+        const elapsed = Math.max(0, now - start)
 
         // плавный переход
-        const progress = Math.min((elapsed - warmup) / duration, 1)
+        const progress = Math.min(elapsed / duration, 1)
         const eased = progress * progress * (3 - 2 * progress) // easeInOutCubic
 
         // сначала рисуем старый фон
@@ -224,12 +221,13 @@ function fadeTo(new_bg) {
         fade.drawImage(new_image, 0, 0)
 
         if (progress < 1) {
-            requestAnimationFrame(step)
+            fade_raf = requestAnimationFrame(step)
+        } else {
+            fade_raf = 0
         }
     }
 
-    // небольшой defer для синхронизации с рендером браузера
-    requestAnimationFrame(() => requestAnimationFrame(step))
+    fade_raf = requestAnimationFrame(step)
 }
 
 
@@ -308,13 +306,22 @@ function load(){
         let cache_src = src
         let colors
         let img = new Image()
-            img.crossOrigin = "Anonymous"
+            if(src.indexOf('image.tmdb.org') === -1) img.crossOrigin = "Anonymous"
 
             img.onload = function(){
-                try{
-                    colors = Color.get(img)
+                if(img.crossOrigin){
+                    try{
+                        colors = Color.get(img)
+                    }
+                    catch(e){
+                        colors = [
+                            [200,200,200],
+                            [100,100,100],
+                            [10,10,10]
+                        ]
+                    }
                 }
-                catch(e){
+                else{
                     colors = [
                         [200,200,200],
                         [100,100,100],
