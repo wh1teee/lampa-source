@@ -771,18 +771,19 @@ function loadTask(){
     }
     catch(e){}
 
-    // 3. Мгновенно запускаем рендер приложения (0 мс ожидания сети)
+    // 3. Неблокирующий старт открытия IndexedDB (сохраняет open_promise до вызовов в showApp)
+    Cache.openDatabase().then(()=>{
+        console.log('Cache', 'worked')
+        Storage.task(()=>{})
+    }).catch(()=>{
+        console.log('Cache', 'error', 'no open database')
+    })
+
+    // 4. Мгновенно запускаем рендер приложения (0 мс ожидания сети)
     showApp()
 
-    // 4. Открываем IndexedDB и выполняем фоновую синхронизацию зеркал, плагинов и аккаунта
+    // 5. Фоновая синхронизация зеркал, плагинов и аккаунта
     setTimeout(()=>{
-        Cache.openDatabase().then(()=>{
-            console.log('Cache', 'worked')
-            Storage.task(()=>{})
-        }).catch(()=>{
-            console.log('Cache', 'error', 'no open database')
-        })
-
         Mirrors.task(()=>{})
         Plugins.task(()=>{
             Plugins.load(()=>{})

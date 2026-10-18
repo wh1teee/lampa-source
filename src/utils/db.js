@@ -11,6 +11,7 @@ export default class IndexedDB {
         this.version = version
 
         this.db = null
+        this.open_promise = null
         this.logs = true
     }
 
@@ -23,7 +24,10 @@ export default class IndexedDB {
      * @returns {Promise<void>}
      */
     openDatabase() {
-        return new Promise((resolve, reject) => {
+        if (this.db) return Promise.resolve()
+        if (this.open_promise) return this.open_promise
+
+        this.open_promise = new Promise((resolve, reject) => {
             let Base = window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB;
 
             if (!Base) return this.log('Not supported'),reject('Not supported')
@@ -33,6 +37,7 @@ export default class IndexedDB {
             const request = Base.open(this.database_name, this.version)
 
             request.onerror = (event)=> {
+                this.open_promise = null
                 this.log(request.error || 'An error occurred while opening the database')
 
                 reject(request.error || 'An error occurred while opening the database')
@@ -58,6 +63,8 @@ export default class IndexedDB {
                 })
             }
         })
+
+        return this.open_promise
     }
 
     /**
@@ -68,6 +75,9 @@ export default class IndexedDB {
      * @returns {Promise<void>}
      */
     addData(store_name,key, value) {
+        if (!this.db && this.open_promise) {
+            return this.open_promise.then(() => this.addData(store_name, key, value))
+        }
         return new Promise((resolve, reject) => {
             if (!this.db) {
                 return this.log('Database not open',store_name,key),reject('Database not open')
@@ -96,6 +106,9 @@ export default class IndexedDB {
      * @returns {Promise<any>}
      */
     getData(store_name, key, life_time = -1, return_meta = false) {
+        if (!this.db && this.open_promise) {
+            return this.open_promise.then(() => this.getData(store_name, key, life_time, return_meta))
+        }
         return new Promise((resolve, reject) => {
             if (!this.db) {
                 return this.log('Database not open',store_name,key),reject('Database not open')
@@ -154,6 +167,9 @@ export default class IndexedDB {
      * @returns {Promise<void>}
      */
     updateData(store_name, key, value) {
+        if (!this.db && this.open_promise) {
+            return this.open_promise.then(() => this.updateData(store_name, key, value))
+        }
         return new Promise((resolve, reject) => {
             if (!this.db) {
                 return this.log('Database not open',store_name,key),reject('Database not open');
@@ -202,6 +218,9 @@ export default class IndexedDB {
      * @returns {Promise<void>}
      */
     rewriteData(store_name, key, value){
+        if (!this.db && this.open_promise) {
+            return this.open_promise.then(() => this.rewriteData(store_name, key, value))
+        }
         return new Promise((resolve, reject) => {
             if (!this.db) {
                 return this.log('Database not open',store_name,key),reject('Database not open')
@@ -228,6 +247,9 @@ export default class IndexedDB {
      * @returns {Promise<void>}
      */
     deleteData(store_name, key) {
+        if (!this.db && this.open_promise) {
+            return this.open_promise.then(() => this.deleteData(store_name, key))
+        }
         return new Promise((resolve, reject) => {
             if (!this.db) {
                 return this.log('Database not open',store_name,key),reject('Database not open')
