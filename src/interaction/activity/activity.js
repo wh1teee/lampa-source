@@ -86,7 +86,7 @@ function init(){
         wait = false
     },1500)
 
-    setTimeout(last,0)
+    Promise.resolve().then(last)
 
     window.addEventListener('popstate', () => {
         if(fullout || wait) return

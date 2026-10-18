@@ -12,6 +12,44 @@ import Cache from './cache'
 import Utils from './utils'
 
 let bad_mirrors = {}
+let swr_store = null
+let swr_save_timer = null
+const SWR_STORAGE_KEY = 'lampa_swr_v1'
+const SWR_FRESH_MS = 1000 * 60 * 10
+const SWR_MAX_MS = 1000 * 60 * 60 * 24
+const SWR_MAX_ITEMS = 16
+
+function getSwrStore(){
+    if(!swr_store){
+        swr_store = {}
+        try{
+            let raw = window.localStorage.getItem(SWR_STORAGE_KEY)
+            if(raw) swr_store = JSON.parse(raw) || {}
+        }
+        catch(e){
+            swr_store = {}
+        }
+    }
+    return swr_store
+}
+
+function saveSwrStore(){
+    clearTimeout(swr_save_timer)
+    swr_save_timer = setTimeout(()=>{
+        try{
+            let store = getSwrStore()
+            let keys = Object.keys(store)
+            if(keys.length > SWR_MAX_ITEMS){
+                keys.sort((a,b) => (store[a].time || 0) - (store[b].time || 0))
+                while(keys.length > SWR_MAX_ITEMS){
+                    delete store[keys.shift()]
+                }
+            }
+            window.localStorage.setItem(SWR_STORAGE_KEY, JSON.stringify(store))
+        }
+        catch(e){}
+    }, 250)
+}
 
 /**
  * Универсальный запрос
@@ -395,23 +433,51 @@ function Request(){
         request(params, error)
     }
 
+    function isSwrCandidate(params) {
+        if(params.post_data || (params.dataType && params.dataType !== 'json')) return false
+        let u = params.url || ''
+        return (params.cache && params.cache.life > 0) || u.indexOf('/3/') >= 0
+    }
+
     function cacheGet(params, callback) {
+        if(Storage.field('request_caching') && isSwrCandidate(params)) {
+            let store = getSwrStore()
+            let key   = cacheName(params)
+            let hit   = store[key]
+
+            if(hit && hit.value && (Date.now() - hit.time < SWR_MAX_MS)){
+                let stale = Date.now() - hit.time > SWR_FRESH_MS
+                Promise.resolve().then(()=>callback(hit.value, hit.value, stale))
+                return
+            }
+        }
+
         if(params.cache && params.cache.life > 0 && Storage.field('request_caching')) {
             Cache.getData('other', cacheName(params), -1, true).then((result)=>{
                 if (result) {
-                    if(Date.now() < result.time + (params.cache.life * 1000 * 60)) callback(result.value, result.value)
-                    else callback(null, result.value)
+                    if(Date.now() < result.time + (params.cache.life * 1000 * 60)) callback(result.value, result.value, false)
+                    else callback(null, result.value, false)
                 } 
-                else callback(null, null)
+                else callback(null, null, false)
             }).catch(e=>{
-                callback(null, null)
+                callback(null, null, false)
             })
         }
-        else callback(null, null)
+        else callback(null, null, false)
     }
 
     function cacheSet(params, data) {
-        Cache.rewriteData('other', cacheName(params), data).catch(e=>{})
+        if(isSwrCandidate(params) && data){
+            let store = getSwrStore()
+            store[cacheName(params)] = {
+                time: Date.now(),
+                value: data
+            }
+            saveSwrStore()
+        }
+        if(params.cache && params.cache.life > 0){
+            Cache.rewriteData('other', cacheName(params), data).catch(e=>{})
+        }
     }
 
     function cacheName(params) {
@@ -489,7 +555,7 @@ function Request(){
 
         let secuses = function(data, fromcache = false){
             function sendSecuses(send_data){
-                if(params.cache && params.cache.life > 0 && !fromcache) {
+                if(!fromcache && Storage.field('request_caching') && isSwrCandidate(params)) {
                     cacheSet(params, send_data)
                 }
 
@@ -568,12 +634,23 @@ function Request(){
             data.headers = params.headers
         }
 
-        cacheGet(params, (cached, old)=>{
+        cacheGet(params, (cached, old, revalidate)=>{
             // Запомнить что есть старый кеш на случай ошибки что бы отдать его
             cache_old = old
 
             if(cached){
                 secuses(cached, true)
+
+                if(revalidate){
+                    setTimeout(()=>{
+                        $.ajax(Object.assign({}, data, {
+                            success: (fresh) => {
+                                if(datatype == 'json' && fresh) cacheSet(params, fresh)
+                            },
+                            error: ()=>{}
+                        }))
+                    }, 50)
+                }
             }
             else{
                 $.ajax(data);
