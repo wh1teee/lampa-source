@@ -646,7 +646,7 @@ function startApp(){
 
     window.app_time_end = Date.now()
 
-    console.log('App', 'boot ready in:', (window.app_time_end - window.app_time_start) + 'ms')
+    console.log('App', 'boot ready in:', (window.app_time_end - window.app_time_launch) + 'ms')
 
     Lampa.Listener.send('app',{type:'ready'})
 
