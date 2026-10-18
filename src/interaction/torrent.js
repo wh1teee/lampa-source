@@ -114,6 +114,19 @@ function connect(){
     })
 }
 
+function loadViewedAndShow(file_stats){
+    if(Storage.field('torrserver_tracktimecode')){
+        Torserver.viewed(SERVER.hash, (viewed)=>{
+            show(file_stats, viewed || [])
+        }, ()=>{
+            show(file_stats, [])
+        })
+    }
+    else{
+        show(file_stats)
+    }
+}
+
 function hash(){
     Torserver.hash({
         title: SERVER.object.title,
@@ -126,7 +139,12 @@ function hash(){
     },(json)=>{
         SERVER.hash = json.hash
 
-        files()
+        if(json.file_stats && json.file_stats.length){
+            loadViewedAndShow(json.file_stats)
+        }
+        else{
+            files()
+        }
     },(echo)=>{
         //Torserver.error()
 
@@ -149,33 +167,29 @@ function hash(){
 function files(){
     let repeat = 0;
 
-    timers.files = setInterval(function(){
+    let checkFiles = function(){
         repeat++;
 
         Torserver.files(SERVER.hash,(json)=>{
             if(json.file_stats){
                 clearInterval(timers.files)
 
-                if(Storage.field('torrserver_tracktimecode')){
-                    Torserver.viewed(SERVER.hash, (viewed)=>{
-					    show(json.file_stats, viewed || [])
-				    }, ()=>{
-					    show(json.file_stats, [])
-				    })
-			    }
-			    else{
-				    show(json.file_stats)
-			    }
-			}
-		})
+                loadViewedAndShow(json.file_stats)
+            }
+        })
 
-        if(repeat >= 45){
+        if(repeat >= 120){
+            clearInterval(timers.files)
+
             Modal.update(Template.get('error',{title: Lang.translate('title_error'),text: Lang.translate('torrent_parser_timeout')}))
 
             Torserver.clear()
             Torserver.drop(SERVER.hash)
         }
-    },2000)
+    }
+
+    setTimeout(checkFiles, 100)
+    timers.files = setInterval(checkFiles, 500)
 }
 
 function install(){
@@ -269,7 +283,8 @@ function parseSubs(path, files){
 function preload(data, run){
     let has_server = Torserver.ip() && data.url.indexOf(Torserver.ip()) > -1
     let has_preload = data.url.indexOf('&preload') > -1
-    let need_preload = has_server && has_preload
+    let is_external_android = Platform.is('android') && Storage.field('player_torrent') == 'android'
+    let need_preload = has_server && has_preload && !is_external_android
 
     if(need_preload){
         let checkout
@@ -369,7 +384,7 @@ function list(items, params){
 			return v.file_index == element.id
 		})[0]
 
-		if(params.movie && params.movie.runtime){
+		if(params.movie && params.movie.runtime && !(view.duration > 0 && view.time > 0)){
 			view.duration = params.movie.runtime * 60
 		}
 
@@ -422,7 +437,7 @@ function list(items, params){
                 })[0]
 
                 if(episode){
-					if(episode.runtime){
+					if(episode.runtime && !(view.duration > 0 && view.time > 0)){
 						view.duration = episode.runtime * 60
 					}
 
@@ -495,8 +510,22 @@ function list(items, params){
         let playlist_element = {}
 
         for(let a in element){
+            if(a === 'playlist' || a === 'raw') continue
             playlist_element[a] = element[a]
         }
+
+        if(playlist_element.card && typeof playlist_element.card === 'object'){
+            if(playlist_element.card.id && !playlist_element.tmdb_id) playlist_element.tmdb_id = playlist_element.card.id
+            if(playlist_element.card.imdb_id && !playlist_element.imdb_id) playlist_element.imdb_id = playlist_element.card.imdb_id
+            playlist_element.card = {
+                id: playlist_element.card.id,
+                imdb_id: playlist_element.card.imdb_id,
+                title: playlist_element.card.title || playlist_element.card.name,
+                original_name: playlist_element.card.original_name
+            }
+        }
+
+        playlist_element.url = Torserver.toPlayUrl(playlist_element.url)
 
         playlist.push(playlist_element)
 
@@ -511,6 +540,8 @@ function list(items, params){
             if(params.movie.id) Favorite.add('history', params.movie, 100)
 
             preload(element, ()=>{
+                element.url = Torserver.toPlayUrl(element.url)
+
                 Player.play(element)
 
                 Player.callback(()=>{
@@ -630,7 +661,7 @@ function list(items, params){
         })
 
         if(element.folder_name && element.folder_name !== folder){
-            html.append($('<div class="torrnet-folder-name'+(folder ? '' : ' selector')+'">'+element.folder_name+'</div>'))
+            html.append($('<div class="torrnet-folder-name">'+element.folder_name+'</div>'))
 
             folder = element.folder_name
         }

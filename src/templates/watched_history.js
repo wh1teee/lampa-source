@@ -1,4 +1,4 @@
-let html = `<div class="watched-history selector">
+let html = `<div class="watched-history">
     <div class="watched-history__icon">
         <svg><use xlink:href="#sprite-viewed"></use></svg>
     </div>

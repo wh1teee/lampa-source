@@ -9,8 +9,39 @@ import Storage from '../../core/storage/storage'
 
 let listener = Subscribe()
 let current  = ''
+let currentPath = ''
 let playlist = []
 let position = 0
+
+function matches(item){
+    if(currentPath && item.path) return item.path == currentPath
+
+    return item.url == current
+}
+
+function withSeasonSeparators(items){
+    if(!items.some(item => item.season > 0)) return items
+
+    let display = []
+    let lastSeason
+
+    items.forEach(item => {
+        let season = item.season || 0
+
+        if(season !== lastSeason){
+            if(season) display.push({
+                separator: true,
+                title: Lang.translate('torrent_serial_season') + ' ' + season
+            })
+
+            lastSeason = season
+        }
+
+        display.push(item)
+    })
+
+    return display
+}
 
 function init(){
     Panel.listener.follow('playlist', show)
@@ -18,7 +49,7 @@ function init(){
     Panel.listener.follow('next', next)
 
     Player.listener.follow('start', (data)=>{
-        url(data.url)
+        url(data.url, data.path)
 
         if(data.playlist && data.playlist.length) set(data.playlist)
         else set(get())
@@ -43,7 +74,7 @@ function show(){
 
     Select.show({
         title: Lang.translate('player_playlist'),
-        items: playlist,
+        items: withSeasonSeparators(playlist),
         onSelect: (a)=>{
             Controller.toggle(enabled.name)
 
@@ -65,14 +96,14 @@ function show(){
 function active(){
     playlist.forEach(p=> p.selected = false)
 
-    let find = playlist.find(l=>l.url == current)
+    let find = playlist.find(l=>matches(l))
     let data = Player.playdata()
 
     // Если текущий урл не найден в плейлисте, то ищем по урлу из плеера
-    if(!find) find = playlist.find(l=>l.url == data.url)
+    if(!find && data) find = playlist.find(l=>l.url == data.url)
     
     // Пробуем найти по эпизоду и сезону, если есть
-    if(!find) find = playlist.find(l=>l.episode == data.episode && l.season == data.season)
+    if(!find && data) find = playlist.find(l=>l.episode == data.episode && l.season == data.season)
     
     if(find){
         position = playlist.indexOf(find)
@@ -146,8 +177,9 @@ function get(){
  * Установить текуший урл
  * @param {string} u 
  */
-function url(u){
+function url(u, p){
     current = u
+    currentPath = p || ''
 }
 
 /**
@@ -155,6 +187,7 @@ function url(u){
  */
 function destroy(){
     current  = ''
+    currentPath = ''
     playlist = []
     position = 0
 }

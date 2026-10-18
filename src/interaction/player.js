@@ -564,6 +564,11 @@ function start(data, need, inner){
     else if(Platform.is('android') && (Storage.field(player_need) == 'android' || launch_player == 'android' || (data.torrent_hash && !Torserver.gstWork()))){
         data.url   = Torserver.toPlayUrl(data.url)
         data.title = Utils.clearHtmlTags(data.title || '').trim()
+
+        if(!data.card && window.Lampa && Lampa.Activity && Lampa.Activity.active){
+            let act = Lampa.Activity.active()
+            if(act && (act.movie || act.card)) data.card = act.movie || act.card
+        }
         
         if(data.playlist && Array.isArray(data.playlist)){
             data.playlist = data.playlist.filter(p=>typeof p.url == 'string')
@@ -571,6 +576,18 @@ function start(data, need, inner){
             data.playlist.forEach(a=>{
                 a.url   = Torserver.toPlayUrl(a.url)
                 a.title = Utils.clearHtmlTags(a.title || '').trim()
+                if(a.card && typeof a.card == 'object'){
+                    if(a.card.id && !a.tmdb_id) a.tmdb_id = a.card.id
+                    if(a.card.imdb_id && !a.imdb_id) a.imdb_id = a.card.imdb_id
+                    a.card = {
+                        id: a.card.id,
+                        imdb_id: a.card.imdb_id,
+                        title: a.card.title || a.card.name,
+                        original_name: a.card.original_name
+                    }
+                }
+                delete a.playlist
+                delete a.raw
             })
         }
 
