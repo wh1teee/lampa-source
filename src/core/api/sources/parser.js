@@ -8,6 +8,7 @@ import Torrent from '../../../interaction/torrent'
 import Torserver from '../../../interaction/torserver'
 import Platform from '../../platform'
 import CardParser from '../../../interaction/card_parser/card_parser'
+import CubPro from '../../cub_pro'
 
 let network = new Reguest()
 
@@ -168,11 +169,60 @@ function mergeResults(items){
 }
 
 function get(params = {}, oncomplite, onerror){
+    let numPreIndexed = (!params.from_search && params.movie)
+        ? CubPro.getNumTorrentsForCard(params.movie).map(item => {
+            item.viewed = viewed(item.hash)
+            return item
+        })
+        : []
+
+    function finalizeResults(rawList){
+        let combined = numPreIndexed.length ? mergeResults(numPreIndexed.concat(rawList || [])) : (rawList || [])
+        let cleaned = combined.filter(item => !CubPro.isJunkTorrent(item.Title || item.title || ''))
+        let finalItems = cleaned.length ? cleaned : combined
+
+        finalItems.forEach(item => {
+            if (!item.num_quality_label) {
+                let q = CubPro.classifyTorrentQuality(item.Title || '', item.num_quality_code)
+                item.num_quality_code = q.code
+                item.num_quality_label = q.label
+            }
+            if (!item.num_voice_label) {
+                let v = CubPro.classifyTorrentVoice(item.Title || '', item.num_voice_code)
+                item.num_voice_code = v.code
+                item.num_voice_label = v.studios[0] || v.tierLabel || ''
+                if (item.info && Array.isArray(item.info.voices)) {
+                    v.studios.forEach(s => {
+                        if (item.info.voices.indexOf(s) === -1) item.info.voices.push(s)
+                    })
+                } else if (v.studios.length) {
+                    item.info = item.info || {}
+                    item.info.voices = v.studios.slice()
+                }
+            }
+        })
+
+        return finalItems
+    }
+
     function complite(data){
-        oncomplite(data)
+        let list = (data && Array.isArray(data.Results)) ? data.Results : []
+        oncomplite({ Results: finalizeResults(list) })
     }
 
     function error(e){
+        if (numPreIndexed.length) {
+            oncomplite({ Results: finalizeResults([]) })
+            return
+        }
+        if (Storage.field('parser_torrent_type') !== 'torrserver' && !params.__ts_fallback_tried) {
+            let torr_link = Storage.field(Storage.field('torrserver_use_link') == 'two' ? 'torrserver_url_two' : 'torrserver_url')
+            if (torr_link) {
+                params.__ts_fallback_tried = true
+                torrserver(params, Utils.checkEmptyUrl(torr_link), complite, () => onerror(e))
+                return
+            }
+        }
         onerror(e)
     }
 

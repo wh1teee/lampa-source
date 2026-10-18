@@ -2,6 +2,101 @@ import Collection from './collection.js'
 
 const CATALOG = [
     {
+        hpu: 'num_releases',
+        title: '⚡ Релизы NUM: 4K UHD, Новинки и Легенды (Торренты в 1 клик)',
+        items: [
+            {
+                id: 'num_4k_uhd',
+                title: '🔥 NUM: 4K UHD, Dolby Vision & BDRemux (980+ релизов)',
+                backdrop_path: '/xOMo8BRK7PfcJv9JCnx7s5hj0PX.jpg',
+                items_count: '989',
+                time: '2026-10-18',
+                views: 412000,
+                liked: 38900,
+                username: 'YouROK NUM 4K',
+                icon: 'l_1',
+                cid: 'num_releases',
+                num_feed_url: 'http://releases.yourok.ru/releases/4k_id.json',
+                endpoint: 'discover/movie?vote_count.gte=2500&sort_by=revenue.desc'
+            },
+            {
+                id: 'num_movies_new',
+                title: '🎬 NUM: Горячие новинки кино (Свежие раздачи)',
+                backdrop_path: '/tmU7GeKVybMWFButWEGl2M4GeiP.jpg',
+                items_count: '589',
+                time: '2026-10-18',
+                views: 368000,
+                liked: 31400,
+                username: 'YouROK NUM',
+                icon: 'l_2',
+                cid: 'num_releases',
+                num_feed_url: 'http://releases.yourok.ru/releases/movies_id.json',
+                endpoint: 'trending/movie/week'
+            },
+            {
+                id: 'num_tv_new',
+                title: '📺 NUM: Новые сериалы и сезоны (NUM Releases)',
+                backdrop_path: '/uDgy6hyPd82kOHh6I95FLtLnj6p.jpg',
+                items_count: '520+',
+                time: '2026-10-18',
+                views: 294000,
+                liked: 26700,
+                username: 'YouROK NUM TV',
+                icon: 'l_3',
+                cid: 'num_releases',
+                num_feed_url: 'http://releases.yourok.ru/releases/tv_id.json',
+                endpoint: 'trending/tv/week'
+            },
+            {
+                id: 'num_legends',
+                title: '🏆 NUM: Легенды кино в максимальном качестве',
+                backdrop_path: '/kXfqcdQKsToO0OUXHcrrNCHDBzO.jpg',
+                items_count: '500',
+                time: '2026-10-17',
+                views: 385000,
+                liked: 35200,
+                username: 'NUM Legends',
+                icon: 'l_4',
+                cid: 'num_releases',
+                num_feed_url: 'http://releases.yourok.ru/releases/legends_id.json',
+                endpoint: 'movie/top_rated'
+            },
+            {
+                id: 'num_cartoons',
+                title: '🧸 NUM: Полнометражные мультфильмы (4K / FHD)',
+                backdrop_path: '/2u7zbn8EudG6kLlBzUYqP8RyFU4.jpg',
+                items_count: '360+',
+                time: '2026-10-16',
+                views: 218000,
+                liked: 19500,
+                username: 'NUM Cartoons',
+                icon: 'l_5',
+                cid: 'num_releases',
+                num_feed_url: 'http://releases.yourok.ru/releases/cartoons_id.json',
+                endpoint: 'discover/movie?with_genres=16&sort_by=popularity.desc'
+            },
+            {
+                id: 'num_anime',
+                title: '⛩️ NUM: Лучшее Аниме (Свежие релизы)',
+                backdrop_path: '/mSDsSDwaP3E7dEfUPWy4J0djt4O.jpg',
+                items_count: '310+',
+                time: '2026-10-16',
+                views: 196000,
+                liked: 18400,
+                username: 'NUM Anime',
+                icon: 'l_6',
+                cid: 'num_releases',
+                num_feed_url: 'http://releases.yourok.ru/releases/anime_id.json',
+                endpoint: 'discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc'
+            }
+        ]
+    },
+    {
+        hpu: 'num_ai',
+        title: '🤖 ИИ-Коллекции NUM (Нейроподборки с готовыми торрентами)',
+        items: []
+    },
+    {
         hpu: 'studios',
         title: 'Стриминговые платформы и Студии (Originals)',
         items: [
@@ -229,11 +324,19 @@ const CATALOG = [
     }
 ]
 
+function syncDynamicCatalog(){
+    let aiSection = CATALOG.find(c => c.hpu === 'num_ai')
+    if (aiSection && window.Lampa && Lampa.CubPro && Lampa.CubPro.getNumAiCollectionsCatalog) {
+        aiSection.items = Lampa.CubPro.getNumAiCollectionsCatalog()
+    }
+}
+
 function getSavedIds(){
     return Lampa.Storage.get('cub_pro_saved_collections', '[]')
 }
 
 function findCollectionById(id){
+    syncDynamicCatalog()
     for(let i = 0; i < CATALOG.length; i++){
         let found = CATALOG[i].items.find(item => item.id === id)
         if(found) return found
@@ -255,6 +358,7 @@ function makeLine(catTitle, catKey, items){
 }
 
 function main(params, oncomplite, onerror){
+    syncDynamicCatalog()
     let fulldata = []
     let savedIds = getSavedIds()
 
@@ -266,13 +370,16 @@ function main(params, oncomplite, onerror){
     }
 
     CATALOG.forEach(cat => {
-        fulldata.push(makeLine(cat.title, cat.hpu, cat.items))
+        if (cat.items && cat.items.length) {
+            fulldata.push(makeLine(cat.title, cat.hpu, cat.items))
+        }
     })
 
     oncomplite(fulldata)
 }
 
 function collection(params, oncomplite, onerror){
+    syncDynamicCatalog()
     let catKey = (params.url || '').replace(/^user_/, '')
     let cat = CATALOG.find(c => c.hpu === catKey) || CATALOG[0]
 
@@ -291,12 +398,66 @@ function liked(params, callback){
     if(callback) callback({ secuses: true })
 }
 
-function full(params, oncomplite, onerror){
-    let col = findCollectionById(params.url)
-    let page = params.page || 1
-    let endpoint = col ? col.endpoint : 'movie/top_rated'
+function tmdbGet(url, params, oncomplite, onerror){
+    if (window.Lampa && Lampa.Api && Lampa.Api.sources && Lampa.Api.sources.tmdb && Lampa.Api.sources.tmdb.get) {
+        Lampa.Api.sources.tmdb.get(url, params, oncomplite, onerror)
+    } else if (onerror) {
+        onerror()
+    }
+}
 
-    Lampa.TMDB.get(endpoint, { page: page }, (data)=>{
+function hydrateNumSlice(rawItems, page, totalPages, fallbackEndpoint, oncomplite, onerror){
+    if(!Array.isArray(rawItems) || !rawItems.length){
+        fallbackTmdb(fallbackEndpoint, page, oncomplite, onerror)
+        return
+    }
+    let pending = rawItems.length
+    let cards = new Array(rawItems.length)
+
+    rawItems.forEach((entry, idx) => {
+        let mType = entry.media_type || 'movie'
+        tmdbGet(mType + '/' + entry.id, {}, (cardData) => {
+            if (cardData && cardData.id) {
+                cardData.source = 'tmdb'
+                if (Array.isArray(entry.torrent) && entry.torrent.length) {
+                    cardData.num_torrents = entry.torrent
+                }
+                if (window.Lampa && Lampa.CubPro && Lampa.CubPro.getReleaseQuality) {
+                    Lampa.CubPro.getReleaseQuality(cardData)
+                }
+                cards[idx] = cardData
+            }
+            if (--pending === 0) {
+                let valid = cards.filter(Boolean)
+                if (valid.length) {
+                    oncomplite({
+                        results: valid,
+                        page: page,
+                        total_pages: totalPages
+                    })
+                } else {
+                    fallbackTmdb(fallbackEndpoint, page, oncomplite, onerror)
+                }
+            }
+        }, () => {
+            if (--pending === 0) {
+                let valid = cards.filter(Boolean)
+                if (valid.length) {
+                    oncomplite({
+                        results: valid,
+                        page: page,
+                        total_pages: totalPages
+                    })
+                } else {
+                    fallbackTmdb(fallbackEndpoint, page, oncomplite, onerror)
+                }
+            }
+        })
+    })
+}
+
+function fallbackTmdb(endpoint, page, oncomplite, onerror){
+    tmdbGet(endpoint || 'movie/top_rated', { page: page }, (data)=>{
         if(data && Array.isArray(data.results)){
             data.results.forEach(item => {
                 item.source = 'tmdb'
@@ -306,6 +467,44 @@ function full(params, oncomplite, onerror){
         }
         else if(onerror) onerror()
     }, onerror)
+}
+
+function full(params, oncomplite, onerror){
+    let col = findCollectionById(params.url)
+    let page = params.page || 1
+    let endpoint = col ? col.endpoint : 'movie/top_rated'
+    let pageSize = 18
+
+    if (col && col.num_feed_url && window.Lampa && Lampa.CubPro && Lampa.CubPro.fetchNumJson) {
+        Lampa.CubPro.fetchNumJson(col.num_feed_url).then(json => {
+            let list = json && Array.isArray(json.items) ? json.items : []
+            if (!list.length) {
+                fallbackTmdb(endpoint, page, oncomplite, onerror)
+                return
+            }
+            let totalPages = Math.min(15, Math.ceil(list.length / pageSize))
+            let slice = list.slice((page - 1) * pageSize, page * pageSize)
+            hydrateNumSlice(slice, page, totalPages, endpoint, oncomplite, onerror)
+        })
+        return
+    }
+
+    if (col && typeof col.ai_index === 'number' && window.Lampa && Lampa.CubPro && Lampa.CubPro.fetchNumJson) {
+        Lampa.CubPro.fetchNumJson(Lampa.CubPro.NUM_AI_COLLECTIONS_URL).then(json => {
+            let aiCol = Array.isArray(json) ? json[col.ai_index] : null
+            let list = aiCol && Array.isArray(aiCol.parts) ? aiCol.parts : []
+            if (!list.length) {
+                fallbackTmdb(endpoint, page, oncomplite, onerror)
+                return
+            }
+            let totalPages = Math.max(1, Math.ceil(list.length / pageSize))
+            let slice = list.slice((page - 1) * pageSize, page * pageSize)
+            hydrateNumSlice(slice, page, totalPages, endpoint, oncomplite, onerror)
+        })
+        return
+    }
+
+    fallbackTmdb(endpoint, page, oncomplite, onerror)
 }
 
 function status(params, callback){

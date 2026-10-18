@@ -141,6 +141,7 @@
             margin-top: 0.5em;
             border-radius: 0.3em;
             white-space: nowrap;
+            text-box: trim-both cap alphabetic;
 
             &::before{
                 content: '';

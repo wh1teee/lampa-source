@@ -309,17 +309,20 @@ function component(object){
     }
 
     this.sortWithViewed = function(){
-        let popular = []
-        let other   = []
+        let popular      = []
+        let num_verified = []
+        let other        = []
 
         results.Results.forEach((a)=>{
             if(a.viewed) popular.push(a)
+            else if(a.source_rank === -1) num_verified.push(a)
             else other.push(a)
         })
 
         popular.sort((a,b)=>b.Seeders - a.Seeders)
+        num_verified.sort((a,b)=>(b.num_quality_code || 0) - (a.num_quality_code || 0) || b.Seeders - a.Seeders)
 
-        results.Results = popular.concat(other)
+        results.Results = popular.concat(num_verified).concat(other)
     }
 
     this.cardID = function(){
@@ -721,8 +724,9 @@ function component(object){
                 let best = CubPro.pickBestTorrent(filtred, object.auto_play_mode)
                 if(best){
                     best.poster = object.movie.img
+                    let badge = [best.num_quality_label, best.num_voice_label].filter(Boolean).join(' • ')
                     setTimeout(()=>{
-                        Noty.show('⚡ Автовыбор: ' + Utils.shortText(best.Title || best.title || '', 55))
+                        Noty.show('⚡ Автовыбор' + (badge ? ' [' + badge + ']' : '') + ': ' + Utils.shortText(best.Title || best.title || '', 50))
                         Torrent.start(best, object.movie)
                     }, 120)
                 }
@@ -821,7 +825,9 @@ function component(object){
                 let ffprobe_elem = item.find('.torrent-item__ffprobe')
                 let ffprobe_tags = []
                 let general      = element.general || {}
-                let quality      = general.resolution || (element.info && element.info.quality ? Utils.qualityToText(element.info.quality + 'p') : '')
+                let numQ         = CubPro.classifyTorrentQuality(element.Title || '', element.num_quality_code)
+                let numV         = CubPro.classifyTorrentVoice(element.Title || '', element.num_voice_code)
+                let quality      = element.num_quality_label || numQ.label || general.resolution || (element.info && element.info.quality ? Utils.qualityToText(element.info.quality + 'p') : '')
 
                 if(object.movie.number_of_seasons && general.season){
                     ffprobe_elem.append('<div class="m-general"><div>S'+general.season+'</div>'+(general.episodes ? '<div>' + general.episodes + '</div>' : '')+'</div>')
@@ -829,7 +835,10 @@ function component(object){
 
                 if(quality) ffprobe_tags.push({media: 'resolution', value: quality})
 
-                if(general.hdr) ffprobe_tags.push({media: 'resolution', value: 'HDR'})
+                if(numQ.isDv) ffprobe_tags.push({media: 'resolution', value: 'Dolby Vision'})
+                else if(numQ.isHdr || general.hdr) ffprobe_tags.push({media: 'resolution', value: 'HDR'})
+
+                if(numQ.isHevc) ffprobe_tags.push({media: 'video', value: 'HEVC'})
     
                 let video = element.ffprobe.find(a=>a.codec_type == 'video')
 
@@ -838,6 +847,13 @@ function component(object){
                 let audio = element.ffprobe.filter(a=>a.codec_type == 'audio' && a.tags)
                 let subs  = element.ffprobe.filter(a=>a.codec_type == 'subtitle' && a.tags)
                 let voice = Arrays.clone(element.info && element.info.voices ? element.info.voices : [])
+
+                if (numV.tierLabel && voice.indexOf(numV.tierLabel) === -1) {
+                    voice.unshift(numV.tierLabel)
+                }
+                numV.studios.forEach(st => {
+                    if (voice.indexOf(st) === -1) voice.push(st)
+                })
 
                 if(video) ffprobe_tags.push({media: 'video',value: video.width + 'x' + video.height})
 

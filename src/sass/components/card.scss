@@ -235,11 +235,17 @@
         background: #ffe216;
         color: #000;
         font-size: 0.8em;
+        font-weight: 700;
         -webkit-border-radius: 0.3em;
         -moz-border-radius: 0.3em;
         border-radius: 0.3em;
         text-transform: uppercase;
+        text-box: trim-both cap alphabetic;
         z-index: 1;
+
+        > div{
+            text-box: trim-both cap alphabetic;
+        }
     }
 
     &__vote{

@@ -15,6 +15,7 @@ import Search from './search/global'
 import Loading from './loading'
 import TmdbApi from '../core/api/sources/tmdb'
 import Account from '../core/account/account'
+import CubPro from '../core/cub_pro'
 
 /**
  * Карточка
@@ -146,17 +147,42 @@ function Card(data, params = {}){
             }
 
             
-            let vote = parseFloat((data.cub_hundred_rating || data.vote_average || 0) + '').toFixed(1)
+            let rates = CubPro.getRatings(data)
+            let imdb  = parseFloat(rates.imdb || 0)
+            let kp    = parseFloat(rates.kp || 0)
 
-            if(vote > 0){
+            if(data.cub_hundred_fire){
                 let vote_elem = document.createElement('div')
                     vote_elem.classList.add('card__vote')
-                    vote_elem.innerText = data.cub_hundred_fire ? Utils.bigNumberToShort(data.cub_hundred_fire) : vote >= 10 ? 10 : vote
+                    vote_elem.innerText = Utils.bigNumberToShort(data.cub_hundred_fire)
+
+                this.card.querySelector('.card__view').appendChild(vote_elem)
+            }
+            else if(imdb > 0){
+                let vote_elem = Template.elem('div', {
+                    class: 'card__vote card__vote--dual',
+                    children: [
+                        Template.elem('div', {
+                            class: 'card__vote-row card__vote-row--imdb',
+                            children: [
+                                Template.elem('span', {class: 'card__vote-tag card__vote-tag--imdb', text: 'IMDb'}),
+                                Template.elem('span', {class: 'card__vote-val card__vote-val--imdb', text: rates.imdb})
+                            ]
+                        }),
+                        kp > 0 ? Template.elem('div', {
+                            class: 'card__vote-row card__vote-row--kp',
+                            children: [
+                                Template.elem('span', {class: 'card__vote-tag card__vote-tag--kp', text: 'КП'}),
+                                Template.elem('span', {class: 'card__vote-val card__vote-val--kp', text: rates.kp})
+                            ]
+                        }) : null
+                    ].filter(Boolean)
+                })
 
                 this.card.querySelector('.card__view').appendChild(vote_elem)
             }
 
-            let qu = data.quality || data.release_quality
+            let qu = data.quality || data.release_quality || CubPro.getReleaseQuality(data)
 
             if(qu && Storage.field('card_quality') && !data.original_name){
                 let quality = document.createElement('div')

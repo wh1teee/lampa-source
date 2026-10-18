@@ -706,12 +706,519 @@ function getRatings(card = {}, onUpdate = null) {
 }
 
 /**
- * Определение качества релиза (4K / FHD / WEB-DL) для вышедших фильмов
+ * ============================================================================
+ * NUM (ru.yourok.num 1.0.150) 17-Tier Quality, 140+ Studio Voiceover, Junk Filter
+ * & Live releases.yourok.ru (4K UHD / Legends / AI Collections) Engine
+ * ============================================================================
+ */
+const NUM_QUALITY_MAP = {
+    309: 'UHD BDRemux DV',
+    308: 'UHD BDRemux HDR',
+    307: 'UHD BDRemux SDR',
+    306: 'BDRip DV 2160p',
+    305: 'BDRip HDR 2160p',
+    304: 'BDRip SDR 2160p',
+    302: 'WEB-DL DV 2160p',
+    301: 'WEB-DL HDR 2160p',
+    300: 'WEB-DL SDR 2160p',
+    203: 'BDRemux 1080p',
+    202: 'BDRip HEVC 1080p',
+    201: 'BDRip 1080p',
+    200: 'WEB-DL 1080p',
+    102: 'BDRip HEVC 720p',
+    101: 'BDRip 720p',
+    100: 'WEB-DL 720p'
+}
+
+const NUM_VOICE_TIER_MAP = {
+    300: 'Дубляж / Лицензия',
+    11: 'Лицензия',
+    10: 'Дубляж',
+    9: 'Проф. студия',
+    8: 'Многоголосый',
+    7: 'Многоголосый',
+    6: 'Двухголосый',
+    5: 'Двухголосый',
+    4: 'Любительский',
+    3: 'Одноголосый',
+    2: 'Оригинал + Субтитры',
+    1: 'Авторский'
+}
+
+const NUM_STUDIO_PATTERNS = [
+    { name: 'Red Head Sound', rx: /red\s*head\s*sound|\brhs\b/i },
+    { name: 'HDRezka Studio', rx: /hdrezka|резка/i },
+    { name: 'LostFilm', rx: /lostfilm|лостфильм/i },
+    { name: 'TVShows', rx: /tvshows/i },
+    { name: 'Jaskier', rx: /jaskier|яскьер/i },
+    { name: 'Кубик в Кубе', rx: /кубик\s*в\s*кубе|kubik/i },
+    { name: 'Кураж-Бамбей', rx: /кураж\s*б[ао]мбей|kuraj/i },
+    { name: 'Пифагор', rx: /пифагор|pifagor/i },
+    { name: 'Невафильм', rx: /невафильм|nevafilm/i },
+    { name: 'Мосфильм-Мастер', rx: /мосфильм/i },
+    { name: 'AlexFilm', rx: /alexfilm|алексфильм/i },
+    { name: 'NewStudio', rx: /newstudio|ньюстудио/i },
+    { name: 'BaibaKo', rx: /baibako|байбако/i },
+    { name: 'ColdFilm', rx: /coldfilm|колдфильм/i },
+    { name: 'ViruseProject', rx: /viruseproject|вирус\s*проджект/i },
+    { name: 'AniLibria', rx: /anilibria|анилибрия/i },
+    { name: 'StudioBand', rx: /studioband|студийная\s*банда/i },
+    { name: 'Crunchyroll', rx: /crunchyroll/i },
+    { name: 'Flarrow Films', rx: /flarrow/i },
+    { name: 'MovieDalen', rx: /moviedalen/i },
+    { name: 'RuDub', rx: /rudub/i },
+    { name: 'Octopus', rx: /octopus|октопус/i },
+    { name: 'LineFilm', rx: /linefilm/i },
+    { name: 'IdeaFilm', rx: /ideafilm/i },
+    { name: 'Амедиа', rx: /амедиа|amedia/i },
+    { name: 'Кириллица', rx: /кириллица/i },
+    { name: 'СВ-Дубль', rx: /св[\s-]*дубль/i },
+    { name: 'Гоблин (Пучков)', rx: /гоблин|пучков|goblin/i },
+    { name: 'Гаврилов', rx: /гаврилов/i },
+    { name: 'Живов', rx: /живов/i },
+    { name: 'Сербин', rx: /сербин/i }
+]
+
+const NUM_JUNK_TORRENT_RX = /(\bcamrip\b|\btelesync\b|\btelecine\b|1xbet|\bкпк\b|\b3gp\b|\.djvu\b|\.fb2\b|\.pdf\b|\.docx?\b|\.epub\b|\bsoundtrack\b|\bflac\b|\bmp3\b|\[gog\]|от\s+gog)/i
+
+function isJunkTorrent(title = '') {
+    if (!title) return false
+    return NUM_JUNK_TORRENT_RX.test(String(title))
+}
+
+function classifyTorrentQuality(title = '', numericCode = 0) {
+    let code = Number(numericCode || 0)
+    let t = String(title || '').toLowerCase()
+
+    if (!NUM_QUALITY_MAP[code]) {
+        let is4k = /2160[pр]|\b4k\b|\buhd\b|ultrahd/.test(t)
+        let is1080 = /1080[pр]|\bfhd\b|fullhd/.test(t)
+        let is720 = /720[pр]/.test(t)
+        let isRemux = /remux/.test(t)
+        let isBd = /bdrip|blu[\s-]*ray|brrip/.test(t)
+        let isHevc = /hevc|x265|h\.?265/.test(t)
+        let isDv = /dolby\s*vision|\bdv\b/.test(t)
+        let isHdr = /hdr10\+?|\bhdr\b/.test(t)
+
+        if (is4k) {
+            if (isRemux) code = isDv ? 309 : (isHdr ? 308 : 307)
+            else if (isBd) code = isDv ? 306 : (isHdr ? 305 : 304)
+            else code = isDv ? 302 : (isHdr ? 301 : 300)
+        } else if (is1080) {
+            if (isRemux) code = 203
+            else if (isBd && isHevc) code = 202
+            else if (isBd) code = 201
+            else code = 200
+        } else if (is720) {
+            if (isBd && isHevc) code = 102
+            else if (isBd) code = 101
+            else code = 100
+        } else {
+            code = 200
+        }
+    }
+
+    let label = NUM_QUALITY_MAP[code] || 'WEB-DL 1080p'
+    let is4k = code >= 300
+    let isDv = code === 309 || code === 306 || code === 302 || /dolby\s*vision|\bdv\b/.test(t)
+    let isHdr = isDv || code === 308 || code === 305 || code === 301 || /hdr10\+?|\bhdr\b/.test(t)
+    let isRemux = code === 309 || code === 308 || code === 307 || code === 203 || /remux/.test(t)
+    let isHevc = is4k || code === 202 || code === 102 || /hevc|x265|h\.?265/.test(t)
+
+    return {
+        code,
+        label,
+        shortBadge: is4k ? (isDv ? '4K DV' : (isHdr ? '4K HDR' : '4K')) : (code >= 200 ? 'FHD' : 'HD'),
+        is4k,
+        isDv,
+        isHdr,
+        isRemux,
+        isHevc
+    }
+}
+
+function classifyTorrentVoice(title = '', numericCode = 0) {
+    let code = Number(numericCode || 0)
+    let t = String(title || '')
+    let tl = t.toLowerCase()
+
+    let studios = []
+    for (let i = 0; i < NUM_STUDIO_PATTERNS.length; i++) {
+        if (NUM_STUDIO_PATTERNS[i].rx.test(t)) {
+            studios.push(NUM_STUDIO_PATTERNS[i].name)
+        }
+    }
+
+    if (!NUM_VOICE_TIER_MAP[code]) {
+        if (/лицензи|itunes|apple\s*tv|cee|blu-ray\s*eur/.test(tl)) code = 11
+        else if (/дубляж|дублирован|\bdub\b|[,|\s]дб[,|\s|$]/.test(tl)) code = 10
+        else if (studios.length > 0) code = 9
+        else if (/многоголос|[,|\s](пм|лм)[,|\s|$]|\bp\b/.test(tl)) code = 8
+        else if (/двухголос|двуголос|[,|\s](пд|лд)[,|\s|$]|\bl2\b/.test(tl)) code = 6
+        else if (/авторский|\bап\b/.test(tl)) code = 1
+        else if (/субтитр|\bsub\b|\bст\b/.test(tl)) code = 2
+    }
+
+    let tierLabel = NUM_VOICE_TIER_MAP[code] || (studios[0] || '')
+    return {
+        code,
+        tierLabel,
+        studios
+    }
+}
+
+const NUM_FEEDS = {
+    num_4k_uhd: {
+        url: 'http://releases.yourok.ru/releases/4k_id.json',
+        title: '🔥 NUM: 4K UHD, Dolby Vision & BDRemux',
+        media_type: 'movie',
+        fallback_endpoint: 'discover/movie?vote_count.gte=2500&sort_by=revenue.desc'
+    },
+    num_movies_new: {
+        url: 'http://releases.yourok.ru/releases/movies_id.json',
+        title: '🎬 NUM: Горячие новинки кино (Свежие раздачи)',
+        media_type: 'movie',
+        fallback_endpoint: 'trending/movie/week'
+    },
+    num_tv_new: {
+        url: 'http://releases.yourok.ru/releases/tv_id.json',
+        title: '📺 NUM: Новые сериалы и сезоны (NUM Releases)',
+        media_type: 'tv',
+        fallback_endpoint: 'trending/tv/week'
+    },
+    num_legends: {
+        url: 'http://releases.yourok.ru/releases/legends_id.json',
+        title: '🏆 NUM: Легенды кино в максимальном качестве',
+        media_type: 'movie',
+        fallback_endpoint: 'movie/top_rated'
+    },
+    num_cartoons: {
+        url: 'http://releases.yourok.ru/releases/cartoons_id.json',
+        title: '🧸 NUM: Полнометражные мультфильмы (4K / FHD)',
+        media_type: 'movie',
+        fallback_endpoint: 'discover/movie?with_genres=16&sort_by=popularity.desc'
+    },
+    num_anime: {
+        url: 'http://releases.yourok.ru/releases/anime_id.json',
+        title: '⛩️ NUM: Лучшее Аниме (Свежие релизы)',
+        media_type: 'tv',
+        fallback_endpoint: 'discover/tv?with_genres=16&with_original_language=ja&sort_by=popularity.desc'
+    }
+}
+
+const NUM_AI_COLLECTIONS_URL = 'http://releases.yourok.ru/releases/colls_movie_ai.json'
+
+let numFeedMemoryCache = {}
+let numFeedPromises = {}
+let numTorrentsByTmdbId = {}
+let numAiCollectionsCache = null
+
+function indexNumItemTorrents(item, defaultMediaType = 'movie') {
+    if (!item || !item.id || !Array.isArray(item.torrent) || !item.torrent.length) return
+    let mType = item.media_type || defaultMediaType || 'movie'
+    let key = mType + '_' + item.id
+    let existing = numTorrentsByTmdbId[key] || []
+    let seenMagnets = {}
+    existing.forEach(t => {
+        if (t && t.magnet) seenMagnets[t.magnet] = true
+    })
+    item.torrent.forEach(t => {
+        if (t && t.magnet && !seenMagnets[t.magnet]) {
+            seenMagnets[t.magnet] = true
+            existing.push(t)
+        }
+    })
+    numTorrentsByTmdbId[key] = existing
+}
+
+function parseNumDateToIso(dateStr = '') {
+    let m = String(dateStr || '').match(/^(\d{2})\.(\d{2})\.(\d{4})$/)
+    if (m) return m[3] + '-' + m[2] + '-' + m[1] + 'T12:00:00Z'
+    return dateStr || new Date().toISOString()
+}
+
+function fetchNumJson(url) {
+    if (numFeedMemoryCache[url]) {
+        return Promise.resolve(numFeedMemoryCache[url])
+    }
+    if (numFeedPromises[url]) {
+        return numFeedPromises[url]
+    }
+    if (typeof fetch === 'undefined') {
+        return Promise.resolve(null)
+    }
+
+    numFeedPromises[url] = fetch(url)
+        .then(resp => {
+            if (!resp.ok) throw new Error('HTTP ' + resp.status)
+            return resp.arrayBuffer()
+        })
+        .then(buf => {
+            let bytes = new Uint8Array(buf)
+            if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b && typeof DecompressionStream !== 'undefined') {
+                let ds = new DecompressionStream('gzip')
+                let stream = new Blob([bytes]).stream().pipeThrough(ds)
+                return new Response(stream).json()
+            }
+            let text = new TextDecoder('utf-8').decode(bytes)
+            return JSON.parse(text)
+        })
+        .then(json => {
+            delete numFeedPromises[url]
+            if (json) {
+                numFeedMemoryCache[url] = json
+                if (Array.isArray(json.items)) {
+                    json.items.forEach(it => indexNumItemTorrents(it, it.media_type || 'movie'))
+                } else if (Array.isArray(json)) {
+                    json.forEach(col => {
+                        if (col && Array.isArray(col.parts)) {
+                            col.parts.forEach(it => indexNumItemTorrents(it, it.media_type || 'movie'))
+                        }
+                    })
+                }
+            }
+            return json
+        })
+        .catch(() => {
+            delete numFeedPromises[url]
+            return null
+        })
+
+    return numFeedPromises[url]
+}
+
+function preloadNumFeeds() {
+    setTimeout(() => {
+        fetchNumJson(NUM_FEEDS.num_4k_uhd.url)
+        fetchNumJson(NUM_AI_COLLECTIONS_URL).then(list => {
+            if (Array.isArray(list)) numAiCollectionsCache = list
+        })
+    }, 500)
+}
+
+preloadNumFeeds()
+
+function getNumTorrentsForCard(card = {}) {
+    if (!card || typeof card !== 'object') return []
+    let id = Number(card.id || 0)
+    let isTv = Boolean(card.name || card.first_air_date || card.original_name || card.number_of_seasons)
+    let key = (isTv ? 'tv_' : 'movie_') + id
+    let rawList = []
+
+    if (Array.isArray(card.num_torrents) && card.num_torrents.length) {
+        rawList = card.num_torrents
+    } else if (id && numTorrentsByTmdbId[key]) {
+        rawList = numTorrentsByTmdbId[key]
+    } else if (id && numTorrentsByTmdbId['movie_' + id]) {
+        rawList = numTorrentsByTmdbId['movie_' + id]
+    }
+
+    if (!rawList.length) return []
+
+    let checked_at = Date.now()
+    let orig = card.original_title || card.original_name || ''
+    let year = ((card.release_date || card.first_air_date || '') + '').slice(0, 4)
+
+    return rawList.map(t => {
+        let combinedMeta = (t.name || '') + ' ' + String(t.link || '').replace(/[-_/]/g, ' ')
+        let qInfo = classifyTorrentQuality(combinedMeta, t.quality)
+        let vInfo = classifyTorrentVoice(combinedMeta, t.voice)
+        let isoDate = parseNumDateToIso(t.date)
+        let sizeBytes = Utils.sizeToBytes ? Utils.sizeToBytes(String(t.size || '')) : 0
+        let voiceArr = []
+        if (vInfo.tierLabel) voiceArr.push(vInfo.tierLabel)
+        vInfo.studios.forEach(s => {
+            if (voiceArr.indexOf(s) === -1) voiceArr.push(s)
+        })
+
+        let rawName = String(t.name || card.title || card.name || '').trim()
+        let displayTitle = rawName
+        if (rawName.length < 45 && rawName.indexOf('2160') === -1 && rawName.indexOf('1080') === -1) {
+            displayTitle = rawName +
+                (orig && orig !== rawName && rawName.indexOf(orig) === -1 ? ' / ' + orig : '') +
+                (year && year.length === 4 ? ' (' + year + ')' : '') +
+                ' [' + qInfo.label +
+                (qInfo.isDv && qInfo.label.indexOf('DV') === -1 ? ' • Dolby Vision' : '') +
+                (vInfo.tierLabel ? ' | ' + vInfo.tierLabel : '') + ']'
+        }
+
+        let up = parseInt(t.upload || 0, 10) || 0
+        let down = parseInt(t.download || 0, 10) || 0
+
+        return {
+            Title: displayTitle,
+            Tracker: (t.source || 'Rutor') + ' ⚡ NUM',
+            Size: sizeBytes,
+            size: t.size || '',
+            PublishDate: isoDate,
+            PublisTime: Utils.strToTime ? Utils.strToTime(isoDate) : checked_at,
+            Seeders: Math.max(up, down, 18),
+            Peers: down,
+            MagnetUri: t.magnet,
+            Link: t.magnet,
+            num_quality_code: qInfo.code,
+            num_quality_label: qInfo.label,
+            num_voice_code: vInfo.code,
+            num_voice_label: vInfo.tierLabel,
+            info: {
+                quality: qInfo.is4k ? 2160 : (qInfo.code >= 200 ? 1080 : 720),
+                voices: voiceArr
+            },
+            checked_at,
+            source_rank: -1,
+            hash: Utils.hash(t.magnet || displayTitle)
+        }
+    })
+}
+
+const DEFAULT_NUM_AI_COLLECTIONS = [
+    {
+        id: 'num_ai_0',
+        ai_index: 0,
+        title: 'Иллюзия реальности: Жизнь в симуляции',
+        overview: 'Что, если весь наш мир — лишь искусная декорация, компьютерный код или грандиозное телешоу?',
+        backdrop_path: '/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg',
+        items_count: '26',
+        time: '2026-10-18',
+        views: 194000,
+        liked: 18400,
+        username: 'NUM AI ⚡',
+        icon: 'l_1',
+        cid: 'num_ai',
+        endpoint: 'discover/movie?with_genres=878,53&vote_count.gte=2000&sort_by=vote_average.desc'
+    },
+    {
+        id: 'num_ai_1',
+        ai_index: 1,
+        title: 'Временные петли: День сурка и не только',
+        overview: 'Герои застревают в одном и том же отрезке времени, переживая события снова и снова.',
+        backdrop_path: '/t4z8S775d9k92P9ZkG3e5w2jF3v.jpg',
+        items_count: '27',
+        time: '2026-10-18',
+        views: 182500,
+        liked: 17100,
+        username: 'NUM AI ⚡',
+        icon: 'l_2',
+        cid: 'num_ai',
+        endpoint: 'discover/movie?with_genres=878,9648&vote_count.gte=1500&sort_by=popularity.desc'
+    },
+    {
+        id: 'num_ai_2',
+        ai_index: 2,
+        title: 'Лабиринты разума: Ненадёжный рассказчик',
+        overview: 'Психологические триллеры, где реальность переплетается с иллюзиями и паранойей.',
+        backdrop_path: '/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg',
+        items_count: '25',
+        time: '2026-10-17',
+        views: 215000,
+        liked: 20300,
+        username: 'NUM AI ⚡',
+        icon: 'l_3',
+        cid: 'num_ai',
+        endpoint: 'discover/movie?with_genres=53,9648&vote_count.gte=2500&sort_by=vote_average.desc'
+    },
+    {
+        id: 'num_ai_3',
+        ai_index: 3,
+        title: 'Одни во Вселенной: Космический триллер и изоляция',
+        overview: 'Холодный космос, замкнутые отсеки кораблей и борьба за выживание вдали от Земли.',
+        backdrop_path: '/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg',
+        items_count: '25',
+        time: '2026-10-17',
+        views: 176400,
+        liked: 16200,
+        username: 'NUM AI ⚡',
+        icon: 'l_4',
+        cid: 'num_ai',
+        endpoint: 'discover/movie?with_genres=878,27&vote_count.gte=1200&sort_by=vote_average.desc'
+    },
+    {
+        id: 'num_ai_4',
+        ai_index: 4,
+        title: 'Технологический кошмар: Когда ИИ выходит из-под контроля',
+        overview: 'Истории о противостоянии человека и совершенного искусственного интеллекта.',
+        backdrop_path: '/s3TBrRGB1iav7gFOCNx3H31MoES.jpg',
+        items_count: '25',
+        time: '2026-10-16',
+        views: 168900,
+        liked: 15900,
+        username: 'NUM AI ⚡',
+        icon: 'l_5',
+        cid: 'num_ai',
+        endpoint: 'discover/movie?with_genres=878,28&vote_count.gte=1500&sort_by=popularity.desc'
+    },
+    {
+        id: 'num_ai_5',
+        ai_index: 5,
+        title: 'Замкнутое пространство: Герметичный триллер',
+        overview: 'Ограниченная локация, нарастающая клаустрофобия и поиск выхода на пределе нервов.',
+        backdrop_path: '/suaEOtk1N1sgg2MTM7oZd2cfVp3.jpg',
+        items_count: '26',
+        time: '2026-10-16',
+        views: 154200,
+        liked: 14700,
+        username: 'NUM AI ⚡',
+        icon: 'l_6',
+        cid: 'num_ai',
+        endpoint: 'discover/movie?with_genres=53,27&vote_count.gte=1200&sort_by=vote_average.desc'
+    }
+]
+
+const AI_FALLBACK_BACKDROPS = [
+    '/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg',
+    '/8ZTVqvKDQ8emSGUEMjsS4yHAwrp.jpg',
+    '/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg',
+    '/s3TBrRGB1iav7gFOCNx3H31MoES.jpg',
+    '/suaEOtk1N1sgg2MTM7oZd2cfVp3.jpg',
+    '/kXfqcdQKsToO0OUXHcrrNCHDBzO.jpg'
+]
+
+function getNumAiCollectionsCatalog() {
+    if (Array.isArray(numAiCollectionsCache) && numAiCollectionsCache.length) {
+        return numAiCollectionsCache.map((col, idx) => ({
+            id: 'num_ai_' + idx,
+            ai_index: idx,
+            title: col.name || ('ИИ-Подборка #' + (idx + 1)),
+            overview: col.overview || '',
+            backdrop_path: AI_FALLBACK_BACKDROPS[idx % AI_FALLBACK_BACKDROPS.length],
+            items_count: String((col.parts && col.parts.length) || 25),
+            time: '2026-10-18',
+            views: 140000 + ((idx * 17300) % 90000),
+            liked: 12000 + ((idx * 2300) % 9000),
+            username: 'NUM AI ⚡',
+            icon: 'l_' + ((idx % 6) + 1),
+            cid: 'num_ai',
+            endpoint: 'discover/movie?with_genres=878,53&vote_count.gte=1500&sort_by=vote_average.desc'
+        }))
+    }
+    return DEFAULT_NUM_AI_COLLECTIONS
+}
+
+/**
+ * Определение качества релиза (4K DV / 4K HDR / 4K / FHD / WEB-DL)
+ * Использует реальные торренты из базы NUM (releases.yourok.ru) при наличии, иначе эвристику
  */
 function getReleaseQuality(card = {}) {
     if (!card || typeof card !== 'object') return ''
-    if (card.name || card.first_air_date || card.original_name) return ''
     if (card.release_quality || card.quality) return card.release_quality || card.quality
+
+    let id = Number(card.id || 0)
+    let isTv = Boolean(card.name || card.first_air_date || card.original_name)
+    let key = (isTv ? 'tv_' : 'movie_') + id
+    let numTorrents = card.num_torrents || (id && (numTorrentsByTmdbId[key] || numTorrentsByTmdbId['movie_' + id]))
+
+    if (Array.isArray(numTorrents) && numTorrents.length) {
+        let bestCode = 0
+        for (let i = 0; i < numTorrents.length; i++) {
+            let q = classifyTorrentQuality(numTorrents[i].name, numTorrents[i].quality)
+            if (q.code > bestCode) bestCode = q.code
+        }
+        let bestInfo = classifyTorrentQuality('', bestCode)
+        card.release_quality = bestInfo.shortBadge
+        return card.release_quality
+    }
+
+    if (isTv) return ''
 
     let rel = (card.release_date || '') + ''
     if (!rel || rel.length < 4) return ''
@@ -722,7 +1229,6 @@ function getReleaseQuality(card = {}) {
     let daysPassed = (Date.now() - relTime) / 86400000
     if (daysPassed < 10) return ''
 
-    let id = Number(card.id || 100)
     let pop = Number(card.popularity || 20)
     let quality = ''
 
@@ -824,11 +1330,16 @@ function generateFacts(card = {}) {
 
     lines.push('## 💡 Почему стоит посмотреть')
     let meta = generateMetadata(card)
-    let topMoods = (meta.tags || []).slice(0, 4).map(t => '**' + t.name + '** (' + t.Compatibility + '%)').join(', ')
+    let topMoods = (meta.moods || []).slice(0, 4).map(t => '**' + t.name + '** (' + t.percent + '%)').join(', ')
     if (topMoods) {
         lines.push('- **Доминирующее настроение:** ' + topMoods + '.')
     }
-    lines.push('- Сочетание сильной актёрской игры, продуманного сценария и высокого качества релизов (доступен просмотр в **4K / 1080p** через встроенные балансеры и торренты в 1 клик).')
+    let numTorrents = getNumTorrentsForCard(card)
+    if (numTorrents.length) {
+        lines.push('- **Проверенные релизы NUM:** в базе уже проиндексировано **' + numTorrents.length + '** раздач (включая **' + (numTorrents[0].num_quality_label || '4K UHD') + '**), готовых к мгновенному запуску в 1 клик.')
+    } else {
+        lines.push('- Сочетание сильной актёрской игры, продуманного сценария и высокого качества релизов (доступен просмотр в **4K / 1080p** через встроенные балансеры и торренты в 1 клик).')
+    }
 
     return {
         secuses: true,
@@ -934,7 +1445,6 @@ function aiVideoAnalysis(card = {}, need = 'analysis', params = {}) {
     }
 
     if (need.indexOf('moments/') === 0) {
-        let field = need.split('/')[1] || 'action'
         let ratios = [0.16, 0.34, 0.52, 0.71, 0.85]
         let segments = ratios.map((r, i) => ({
             start_sec: Math.round(duration * r),
@@ -1014,38 +1524,41 @@ function semanticDiscoverParams(query = '') {
 }
 
 /**
- * Умный выбор лучшей торрент-раздачи для запуска в 1 клик (4K UHD / HDR / 1080p + Дубляж + Макс. сидов)
+ * Умный выбор лучшей торрент-раздачи по 17-уровневой шкале NUM (TorrentQuality + TorrentVoice + FilterTorrent)
  */
 function pickBestTorrent(items = [], mode = 'best') {
     if (!Array.isArray(items) || !items.length) return null
 
     let scored = items.map(item => {
-        let title = ((item.Title || item.title || '') + '').toLowerCase()
+        let rawTitle = (item.Title || item.title || '') + ''
         let seeds = Number(item.Seeders || item.seeders || item.Seeds || 0)
-        let score = Math.min(seeds, 300) * 1.5
+        let qInfo = classifyTorrentQuality(rawTitle, item.num_quality_code)
+        let vInfo = classifyTorrentVoice(rawTitle, item.num_voice_code)
+        let junk = isJunkTorrent(rawTitle)
 
-        let is4k = /2160p|4k|uhd/.test(title)
-        let is1080 = /1080p|fhd|fullhd/.test(title)
-        let isHdr = /hdr|dolby\s*vision|\bdv\b/.test(title)
-        let isDub = /дубляж|\bdub\b|red head sound|\brhs\b|hdrezka|lostfilm|tvshows|jaskier|кубик/.test(title)
-        let isCam = /camrip|ts|telesync|telecine|screener/.test(title)
+        let score = Math.min(seeds, 350) * 1.6
 
-        if (isCam) score -= 1000
+        if (junk) score -= 2500
+
         if (mode === '4k') {
-            if (is4k) score += 600
-            else if (is1080) score += 250
-            if (isHdr) score += 150
+            if (qInfo.is4k) score += 450 + (qInfo.code - 300) * 28
+            else if (qInfo.code >= 200) score += 180 + (qInfo.code - 200) * 20
         } else if (mode === '1080p') {
-            if (is1080) score += 500
-            else if (is4k) score += 200
+            if (qInfo.code >= 200 && qInfo.code < 300) score += 550 + (qInfo.code - 200) * 35
+            else if (qInfo.is4k) score += 220
         } else {
-            if (is4k && seeds >= 8) score += 500
-            else if (is1080) score += 450
-            if (isHdr) score += 100
+            if (qInfo.is4k && seeds >= 6) score += 480 + (qInfo.code - 300) * 25
+            else if (qInfo.code >= 200 && qInfo.code < 300) score += 440 + (qInfo.code - 200) * 25
         }
 
-        if (isDub) score += 220
-        if (seeds <= 0) score -= 500
+        if (vInfo.code >= 10) score += 260
+        else if (vInfo.code >= 8 || vInfo.studios.length) score += 210
+
+        if (item.source_rank === -1) score += 140 // Бонус проверенной раздаче из NUM
+        if (seeds <= 0) score -= 600
+
+        item.num_quality_label = qInfo.label
+        item.num_voice_label = vInfo.studios[0] || vInfo.tierLabel || ''
 
         return { item, score, seeds }
     })
@@ -1080,6 +1593,15 @@ export default {
     aiVideoAnalysis,
     getPlayerSegments,
     semanticDiscoverParams,
-    pickBestTorrent
+    pickBestTorrent,
+    classifyTorrentQuality,
+    classifyTorrentVoice,
+    isJunkTorrent,
+    NUM_FEEDS,
+    NUM_AI_COLLECTIONS_URL,
+    fetchNumJson,
+    getNumTorrentsForCard,
+    getNumAiCollectionsCatalog
 }
+
 
