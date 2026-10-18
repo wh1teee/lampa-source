@@ -674,7 +674,7 @@ function full(params = {}, oncomplite, onerror){
 
     if(Utils.dcma(params.method, params.id)) return onerror()
 
-    let single_request = !Storage.field('proxy_tmdb')
+    let single_request = !Storage.field('tmdb_proxy_api')
     let append_fields  = single_request
         ? 'credits,recommendations,similar,videos,reviews,content_ratings,release_dates,external_ids,keywords,alternative_titles,images&include_image_language=' + image_languages + '&include_video_language=' + image_languages
         : 'reviews,content_ratings,release_dates,external_ids,keywords,alternative_titles,images&include_image_language=' + image_languages

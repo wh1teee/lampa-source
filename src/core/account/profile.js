@@ -169,12 +169,36 @@ function showProfileSelector(profiles, callback, isLocal = false){
         }
     }
 
-    select = [additional].concat(list)
+    let diagnosticsItem = {
+        title: '⚡ Диагностика и Перформанс (Sentry / FPS / Кэш)',
+        subtitle: 'Профайлер загрузки, P95 задержек парсера, Hit-Rate кэша и лог ошибок',
+        template: 'selectbox_icon',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
+        onSelect: ()=>{
+            CubPro.openDiagnosticsModal(callback)
+        }
+    }
+
+    let oledScreensaverItem = {
+        title: '🌙 OLED Ambient Заставка (Burn-In Защита)',
+        subtitle: 'Режим глубокого черного с плавающим неоновым свечением ClockDream',
+        template: 'selectbox_icon',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
+        onSelect: ()=>{
+            callback && callback()
+            if(window.Lampa && window.Lampa.Screensaver){
+                window.Lampa.Screensaver.show('oled')
+            }
+        }
+    }
+
+    select = [additional].concat(list).concat([diagnosticsItem, oledScreensaverItem])
 
     Select.show({
         title: Lang.translate('account_profiles'),
         items: select,
         onSelect: (a)=>{
+            if(a.onSelect) return
             if(isLocal){
                 CubPro.selectProfile(a.clone)
             }

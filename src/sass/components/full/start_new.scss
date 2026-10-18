@@ -369,7 +369,7 @@
             overflow: auto;
         }
 
-        .full-start__button:not(.focus):not(.view--online):not(.view--torrent):not(.view--trailer):not(.button--play) span{
+        .full-start__button:not(.focus):not(.view--smart-resume):not(.view--online):not(.view--torrent):not(.view--trailer):not(.button--play) span{
             display: none;
         }
     }

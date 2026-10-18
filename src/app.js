@@ -694,7 +694,11 @@ function showApp(){
 
         Screensaver.enable()
 
-        $('.welcome').remove()
+        let welcomeEl = $('.welcome')
+        welcomeEl.addClass('welcome--fade-out')
+        setTimeout(()=>{
+            welcomeEl.remove()
+        }, 320)
     }
 }
 

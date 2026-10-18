@@ -2,6 +2,16 @@ import Storage from './storage/storage'
 import Arrays from '../utils/arrays'
 import Utils from '../utils/utils'
 import Lang from './lang'
+import Ambient from './pro/ambient'
+import SmartResume from './pro/smart_resume'
+import Motion from './pro/motion'
+import Telemetry from './pro/telemetry'
+
+try {
+    Telemetry.initTelemetry()
+    Motion.initMotionStyles()
+} catch (e) {}
+
 
 /**
  * Детерминированный генератор псевдослучайных чисел по целочисленному seed
@@ -1026,14 +1036,19 @@ function parseNumDateToIso(dateStr = '') {
 
 function fetchNumJson(url, defaultMediaType = 'movie') {
     if (numFeedMemoryCache[url]) {
+        Telemetry.recordCacheEvent('hit')
         return Promise.resolve(numFeedMemoryCache[url])
     }
     if (numFeedPromises[url]) {
+        Telemetry.recordCacheEvent('hit')
         return numFeedPromises[url]
     }
     if (typeof fetch === 'undefined') {
         return Promise.resolve(null)
     }
+
+    Telemetry.recordCacheEvent('miss')
+    let t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
 
     numFeedPromises[url] = fetch(url)
         .then(resp => {
@@ -1052,6 +1067,8 @@ function fetchNumJson(url, defaultMediaType = 'movie') {
         })
         .then(json => {
             delete numFeedPromises[url]
+            let dt = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0
+            Telemetry.recordNetworkLatency(dt, 'num')
             if (json) {
                 numFeedMemoryCache[url] = json
                 if (Array.isArray(json.items)) {
@@ -1712,7 +1729,27 @@ export default {
     getNumTorrentsForCard,
     getNumAiCollectionsCatalog,
     normalizeSearchQuery,
-    searchNumReleases
+    searchNumReleases,
+    // 2026 Modular Pro Domain Sub-modules
+    ambient: Ambient,
+    smartResume: SmartResume,
+    motion: Motion,
+    telemetry: Telemetry,
+    extractVividColorFromImage: Ambient.extractVividColorFromImage,
+    computeDeterministicVividColor: Ambient.computeDeterministicVividColor,
+    applyFullCardAmbient: Ambient.applyFullCardAmbient,
+    recordTorrentSelection: SmartResume.recordTorrentSelection,
+    recordTorrentFileSession: SmartResume.recordTorrentFileSession,
+    getSmartResumeState: SmartResume.getSmartResumeState,
+    resumeTorrentSession: SmartResume.resumeTorrentSession,
+    initMotionStyles: Motion.initMotionStyles,
+    OledDriftScreensaver: Motion.OledDriftScreensaver,
+    initTelemetry: Telemetry.initTelemetry,
+    recordNetworkLatency: Telemetry.recordNetworkLatency,
+    recordCacheEvent: Telemetry.recordCacheEvent,
+    getDiagnosticsReport: Telemetry.getDiagnosticsReport,
+    openDiagnosticsModal: Telemetry.openDiagnosticsModal
 }
+
 
 

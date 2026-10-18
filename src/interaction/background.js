@@ -306,7 +306,7 @@ function load(){
         let cache_src = src
         let colors
         let img = new Image()
-            if(src.indexOf('image.tmdb.org') === -1) img.crossOrigin = "Anonymous"
+            if(src && String(src).indexOf('http') === 0) img.crossOrigin = "Anonymous"
 
             img.onload = function(){
                 if(img.crossOrigin){
@@ -338,6 +338,12 @@ function load(){
             }
 
             img.onerror = ()=>{
+                if(img.crossOrigin && cache_src && String(cache_src).indexOf('http') === 0){
+                    img.removeAttribute && img.removeAttribute('crossorigin')
+                    img.crossOrigin = null
+                    img.src = cache_src
+                    return
+                }
                 draw(false, false, true)
             }
 
@@ -361,7 +367,7 @@ function change(url = ''){
     timer = setTimeout(()=>{
         if(url) load()
         else draw(false, false, true)
-    },1000)
+    },220)
 }
 
 /**

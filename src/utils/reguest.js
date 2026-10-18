@@ -368,7 +368,8 @@ function Request(){
         params.url = params.url || 'no url'
 
         let error     = false
-        let hasmirror = Manifest.cub_mirrors.find(m=>params.url.indexOf(m) >= 0)
+        let is_tmdb_proxy = params.url.indexOf('apitmdb.') >= 0 || params.url.indexOf('imagetmdb.') >= 0
+        let hasmirror = is_tmdb_proxy ? false : Manifest.cub_mirrors.find(m=>params.url.indexOf(m) >= 0)
         
         if(hasmirror){
             // Заменияем протокол на живой урл
@@ -589,7 +590,8 @@ function Request(){
         }
 
         let datatype = params.dataType || 'json';
-        let timeout  = !Mirrors.connected() && params.url.indexOf(Manifest.cub_domain) >= 0 ? 2000 : params.timeout || need.timeout;
+        let is_tmdb_url = params.url.indexOf('apitmdb.') >= 0 || params.url.indexOf('imagetmdb.') >= 0;
+        let timeout  = !is_tmdb_url && !Mirrors.connected() && params.url.indexOf(Manifest.cub_domain) >= 0 ? 2000 : params.timeout || need.timeout;
 
         let data = {
             dataType: datatype,

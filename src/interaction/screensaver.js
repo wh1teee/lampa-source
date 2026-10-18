@@ -6,6 +6,7 @@ import Nature from './screensaver/nature'
 import Chrome from './screensaver/chrome'
 import Cub from './screensaver/cub'
 import Aerial from './screensaver/aerial'
+import Motion from '../core/pro/motion'
 
 /**
  * Скринсейвер
@@ -29,7 +30,9 @@ class Screensaver{
             nature: Nature,
             chrome: Chrome,
             cub: Cub,
-            aerial: Aerial
+            aerial: Aerial,
+            oled: Motion.OledDriftScreensaver,
+            oled_drift: Motion.OledDriftScreensaver
         }
     }
 

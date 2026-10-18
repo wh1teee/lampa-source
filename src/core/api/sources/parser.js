@@ -345,9 +345,12 @@ function get(params = {}, oncomplite, onerror){
     }
 
     let servedFromCache = false
+    let reqStartMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
     if(cachedEntry && Array.isArray(cachedEntry.items) && cachedEntry.items.length > 0 && !params.force_refresh){
         let age = now - (cachedEntry.time || 0)
         if(age < TORRENTS_FRESH_TTL_MS){
+            CubPro.recordCacheEvent('hit')
+            CubPro.recordNetworkLatency(0.2, 'parser')
             oncomplite({
                 Results: cloneTorrentResults(cachedEntry.items),
                 from_cache: true,
@@ -357,6 +360,8 @@ function get(params = {}, oncomplite, onerror){
         }
         if(age < TORRENTS_STALE_TTL_MS){
             servedFromCache = true
+            CubPro.recordCacheEvent('swr')
+            CubPro.recordNetworkLatency(0.4, 'parser')
             oncomplite({
                 Results: cloneTorrentResults(cachedEntry.items),
                 from_cache: true,
@@ -367,14 +372,18 @@ function get(params = {}, oncomplite, onerror){
 
     // Если спекулятивный prefetch уже летит по этому же ключу — присоединяемся к нему без дублирования запросов
     if(!servedFromCache && inFlightSwrCallbacks[swrKey]){
+        CubPro.recordCacheEvent('hit')
         inFlightSwrCallbacks[swrKey].push({ oncomplite, onerror })
         return
     }
     if(!servedFromCache){
+        CubPro.recordCacheEvent('miss')
         inFlightSwrCallbacks[swrKey] = [{ oncomplite, onerror }]
     }
 
     function complite(data){
+        let dt = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - reqStartMs
+        CubPro.recordNetworkLatency(dt, 'parser')
         let list = (data && Array.isArray(data.Results)) ? data.Results : []
         let finalItems = finalizeResults(list)
 

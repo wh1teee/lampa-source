@@ -19,6 +19,7 @@ import Loading from './loading'
 import Request from '../utils/reguest'
 import subsrt from "../utils/subsrt/subsrt";
 import Keypad from '../core/keypad'
+import CubPro from '../core/cub_pro'
 
 let SERVER = {}
 
@@ -363,6 +364,8 @@ function list(items, params){
     let playlist = []
     let scroll_to_element
     let first_item
+    let advance_to_next_item = false
+    let rendered_items = []
 
     Lampa.Listener.send('torrent_file',{type:'list_open',items, params})
 
@@ -499,7 +502,18 @@ function list(items, params){
 
         item[0].visibility = 'hidden'
 
-        if(view.percent > 0) scroll_to_element = item
+        if(advance_to_next_item){
+            scroll_to_element = item
+            advance_to_next_item = false
+        }
+        if(view.percent > 0){
+            scroll_to_element = item
+            if(view.percent >= 92 && inx + 1 < items.length){
+                advance_to_next_item = true
+            }
+        }
+
+        rendered_items.push({ element, item })
 
         element.subtitles = parseSubs(element.path, params.files)
 
@@ -538,6 +552,8 @@ function list(items, params){
             if(navigator.userAgent.toLowerCase().indexOf('android') >= 0 && !Platform.is('android')) return Platform.install('apk')
 
             if(params.movie.id) Favorite.add('history', params.movie, 100)
+
+            CubPro.recordTorrentFileSession(params.movie || SERVER.movie, SERVER.object, SERVER.hash, element, items)
 
             preload(element, ()=>{
                 element.url = Torserver.toPlayUrl(element.url)
@@ -672,6 +688,22 @@ function list(items, params){
 
         Lampa.Listener.send('torrent_file',{type:'render',element,item,items,params})
     })
+
+    if(items.length){
+        CubPro.recordTorrentFileSession(params.movie || SERVER.movie, SERVER.object, SERVER.hash, null, items)
+    }
+
+    if(window.__cubProAutoResumeTarget && (Date.now() - window.__cubProAutoResumeTarget.timestamp < 20000)){
+        let hint = window.__cubProAutoResumeTarget
+        window.__cubProAutoResumeTarget = null
+        let matched = rendered_items.find(r =>
+            (hint.target_file && r.element.id === hint.target_file.id) ||
+            (hint.episode && r.element.episode == hint.episode && (!hint.season || r.element.season == hint.season))
+        )
+        if(matched){
+            scroll_to_element = matched.item
+        }
+    }
 
     if(items.length == 0) html = Template.get('error',{title: Lang.translate('empty_title'),text: Lang.translate('torrent_parser_nofiles')})
     else Modal.title(Lang.translate('title_files'))

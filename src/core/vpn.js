@@ -66,7 +66,7 @@ function task(call){
     let reg = Storage.get('region','{}')
     let cached_country = (reg && reg.code) ? (reg.code + '').trim().toLowerCase() : (Storage.field('language') || 'ru')
 
-    if(Storage.field('proxy_tmdb') && !window.lampa_settings.disable_features.install_proxy){
+    if(!window.lampa_settings.disable_features.install_proxy){
         TMDBProxy.init()
     }
 

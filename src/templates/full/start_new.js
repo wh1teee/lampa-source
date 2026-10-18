@@ -35,6 +35,19 @@ let html = `<div class="full-start-new">
             </div>
 
             <div class="full-start-new__buttons">
+                <div class="full-start__button selector view--smart-resume hide">
+                    <div class="smart-resume__row">
+                        <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M6 4.75C6 3.96 6.87 3.48 7.54 3.9L19.04 11.15C19.66 11.54 19.66 12.46 19.04 12.85L7.54 20.1C6.87 20.52 6 20.04 6 19.25V4.75Z"/>
+                        </svg>
+                        <div class="smart-resume__labels">
+                            <span class="smart-resume__title">Продолжить</span>
+                            <span class="smart-resume__meta">Торрент</span>
+                        </div>
+                    </div>
+                    <div class="smart-resume__bar"><div class="smart-resume__bar-fill" style="width: 0%"></div></div>
+                </div>
+
                 <div class="full-start__button selector view--online">
                     <svg width="135" height="147" viewBox="0 0 135 147" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M121.5 96.8823C139.5 86.49 139.5 60.5092 121.5 50.1169L41.25 3.78454C23.25 -6.60776 0.750004 6.38265 0.750001 27.1673L0.75 51.9742C4.70314 35.7475 23.6209 26.8138 39.0547 35.7701L94.8534 68.1505C110.252 77.0864 111.909 97.8693 99.8725 109.369L121.5 96.8823Z" fill="currentColor"/>

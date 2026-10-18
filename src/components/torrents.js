@@ -251,6 +251,50 @@ function component(object){
         files.appendHead(filter.render())
     }
 
+    this.toggleQuickChipById = function(chipId){
+        if(!files || !results || !Array.isArray(results.Results) || !results.Results.length) return false
+        let head = files.render().find('.explorer__files-head')
+        let container = head.find('.torrent-quick-filters')
+        if(!container.length) return false
+        let chipBtn = container.find('[data-chip="' + chipId + '"]')
+        if(!chipBtn.length) return false
+
+        active_quick_chip = (active_quick_chip === chipId && chipId !== 'all') ? 'all' : chipId
+        container.find('.torrent-quick-chip').removeClass('active')
+        container.find('[data-chip="' + active_quick_chip + '"]').addClass('active')
+
+        this.filtred()
+        this.reset()
+        this.showResults()
+
+        Controller.collectionSet(scroll.render(), files.render(true))
+        let firstItem = scroll.render().find('.torrent-item:eq(0)')[0]
+        let targetChip = container.find('[data-chip="' + active_quick_chip + '"]')[0]
+        if(targetChip && document.activeElement === targetChip) Navigator.focused(targetChip)
+        else if(firstItem) Navigator.focused(firstItem)
+        return true
+    }
+
+    let handleRemoteColorKeys = (e)=>{
+        if(!Controller.enabled() || Controller.enabled().name !== 'content') return
+        let code = e.keyCode || e.which
+        // NUM TorrentsKeyHandler.handleKey port: Red (183)->4K, Green (184)->DV/HDR, Yellow (185)->1080p, Blue (186)->Dub
+        let map = {
+            183: '4k',     // KEYCODE_PROG_RED
+            403: '4k',
+            184: 'hdr_dv', // KEYCODE_PROG_GREEN
+            404: 'hdr_dv',
+            185: '1080p',  // KEYCODE_PROG_YELLOW
+            405: '1080p',
+            186: 'dub',    // KEYCODE_PROG_BLUE
+            406: 'dub'
+        }
+        if(map[code]){
+            e.preventDefault()
+            this.toggleQuickChipById(map[code])
+        }
+    }
+
     this.renderQuickChips = function(){
         if(!filter || !results || !Array.isArray(results.Results) || !results.Results.length) return
         let head = files.render().find('.explorer__files-head')
@@ -260,11 +304,11 @@ function component(object){
 
         let list = results.Results
         let chips = [
-            { id: 'all',    title: 'Все',     count: list.length },
-            { id: '4k',     title: '4K UHD',  count: list.filter(e => matchesQuickChip(e, '4k')).length },
-            { id: 'hdr_dv', title: 'DV / HDR',count: list.filter(e => matchesQuickChip(e, 'hdr_dv')).length },
-            { id: '1080p',  title: '1080p',   count: list.filter(e => matchesQuickChip(e, '1080p')).length },
-            { id: 'dub',    title: 'Дубляж',  count: list.filter(e => matchesQuickChip(e, 'dub')).length }
+            { id: 'all',    title: 'Все',     count: list.length, color: '' },
+            { id: '4k',     title: '4K UHD',  count: list.filter(e => matchesQuickChip(e, '4k')).length, color: '#ff4b4b' },
+            { id: 'hdr_dv', title: 'DV / HDR',count: list.filter(e => matchesQuickChip(e, 'hdr_dv')).length, color: '#34d399' },
+            { id: '1080p',  title: '1080p',   count: list.filter(e => matchesQuickChip(e, '1080p')).length, color: '#fbbf24' },
+            { id: 'dub',    title: 'Дубляж',  count: list.filter(e => matchesQuickChip(e, 'dub')).length, color: '#38bdf8' }
         ].filter(c => c.id === 'all' || c.count > 0)
 
         if(chips.length <= 1) return
@@ -272,7 +316,8 @@ function component(object){
         let container = $('<div class="torrent-quick-filters"></div>')
 
         chips.forEach(chip => {
-            let btn = $('<div class="simple-button torrent-quick-chip selector' + (active_quick_chip === chip.id ? ' active' : '') + '" data-chip="' + chip.id + '"><span>' + chip.title + '</span><b>' + chip.count + '</b></div>')
+            let dotHtml = chip.color ? '<i class="torrent-quick-chip__color-dot" style="background:' + chip.color + ';color:' + chip.color + '"></i>' : ''
+            let btn = $('<div class="simple-button torrent-quick-chip selector' + (active_quick_chip === chip.id ? ' active' : '') + '" data-chip="' + chip.id + '">' + dotHtml + '<span>' + chip.title + '</span><b>' + chip.count + '</b></div>')
 
             btn.on('hover:focus', (e)=>{
                 last_filter = e.target
@@ -871,6 +916,7 @@ function component(object){
                 let best = CubPro.pickBestTorrent(filtred, object.auto_play_mode)
                 if(best){
                     best.poster = object.movie.img
+                    CubPro.recordTorrentSelection(object.movie, best)
                     let badge = [best.num_quality_label, best.num_voice_label].filter(Boolean).join(' • ')
                     setTimeout(()=>{
                         Noty.show('⚡ Автовыбор' + (badge ? ' [' + badge + ']' : '') + ': ' + Utils.shortText(best.Title || best.title || '', 50))
@@ -1090,6 +1136,8 @@ function component(object){
 
                 element.poster = object.movie.img
 
+                CubPro.recordTorrentSelection(object.movie, element)
+
                 this.start()
 
                 Torrent.start(element, object.movie)
@@ -1158,6 +1206,9 @@ function component(object){
             this.initialize()
         }
         
+        window.removeEventListener('keydown', handleRemoteColorKeys)
+        window.addEventListener('keydown', handleRemoteColorKeys)
+
         Background.immediately(Utils.cardImgBackgroundBlur(object.movie))
 
         Controller.add('content',{
@@ -1192,11 +1243,12 @@ function component(object){
     }
 
     this.pause = function(){
+        window.removeEventListener('keydown', handleRemoteColorKeys)
         listener && listener.destroy()
     }
 
     this.stop = function(){
-        
+        window.removeEventListener('keydown', handleRemoteColorKeys)
     }
 
     this.render = function(){
@@ -1204,6 +1256,7 @@ function component(object){
     }
 
     this.destroy = function(){
+        window.removeEventListener('keydown', handleRemoteColorKeys)
         network.clear()
         Parser.clear()
 

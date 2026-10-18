@@ -1,5 +1,6 @@
 import Api from '../../../core/api/api'
 import Color from '../../../utils/color'
+import CubPro from '../../../core/cub_pro'
 
 export default {
     onCreate: function(){
@@ -13,17 +14,27 @@ export default {
             im[0].decoding = 'async'
         }
 
+        CubPro.applyFullCardAmbient(this.html, this.card, im[0])
+
         if(window.innerWidth <= 480){
             this.img_poster = new Image()
             this.img_poster.crossOrigin = "Anonymous"
         }
 
         this.img_poster.onerror = (e)=>{
+            let fallbackSrc = poster || (this.card && this.card.img)
+            if (this.img_poster.crossOrigin && fallbackSrc && String(fallbackSrc).indexOf('http') === 0) {
+                this.img_poster.removeAttribute && this.img_poster.removeAttribute('crossorigin')
+                this.img_poster.crossOrigin = null
+                this.img_poster.src = fallbackSrc
+                return
+            }
             this.img_poster.src = './img/img_broken.svg'
         }
 
         this.img_poster.onload = (e)=>{
             im.parent().addClass('loaded')
+            CubPro.applyFullCardAmbient(this.html, this.card, this.img_poster)
         }
 
         if(window.innerWidth <= 480){
@@ -91,6 +102,6 @@ export default {
 
         if(poster) this.html.find('.full-start__poster').addClass('background--poster')
 
-        this.img_poster.src = poster || this.card.img
+        this.img_poster.src = poster || this.card.img || './img/img_broken.svg'
     }
 }

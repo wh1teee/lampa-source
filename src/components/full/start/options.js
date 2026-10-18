@@ -2,6 +2,7 @@ import Controller from '../../../core/controller'
 import Select from '../../../interaction/select'
 import Activity from '../../../interaction/activity/activity'
 import Lang from '../../../core/lang'
+import CubPro from '../../../core/cub_pro'
 
 export default {
     onCreate: function(){
@@ -103,6 +104,19 @@ export default {
                     }
                 })
             }
+
+            options.push({
+                title: '🛠️ Система и Телеметрия',
+                separator: true
+            })
+
+            options.push({
+                title: '⚡ Диагностика и Перформанс (Sentry / FPS / Кэш)',
+                subtitle: 'P95 задержки NUM/Jackett, Hit-Rate кэша и монитор ошибок',
+                onSelect: ()=>{
+                    CubPro.openDiagnosticsModal(() => Controller.toggle('content'))
+                }
+            })
 
             Select.show({
                 title: Lang.translate('more'),
