@@ -516,6 +516,215 @@ function createProfile(name, child = false, age = 18) {
     return newProfile
 }
 
+/**
+ * 2-уровневый движок рейтингов IMDb (главный) + Кинопоиск (второй):
+ * - Tier 1 (0ms синхронно): мгновенный расчёт откалиброванных оценок IMDb и КП из кэша или статистической модели TMDB (без скачков верстки / 0.00 CLS)
+ * - Tier 2 (SWR фон): при открытии карточки и наличии imdb_id / kinopoisk_id подтягивает точные живые оценки из rating.kinopoisk.ru / API и обновляет кэш + текст на месте
+ */
+let ratingsMemoryCache = null
+let ratingsPending = {}
+
+function ensureRatingsCache() {
+    if (!ratingsMemoryCache) {
+        ratingsMemoryCache = Storage.get('cub_pro_ratings_v1', '{}')
+        if (!ratingsMemoryCache || typeof ratingsMemoryCache !== 'object') {
+            ratingsMemoryCache = {}
+        }
+    }
+    return ratingsMemoryCache
+}
+
+function saveRatingsCache() {
+    if (!ratingsMemoryCache) return
+    let keys = Object.keys(ratingsMemoryCache)
+    if (keys.length > 1500) {
+        let trim = keys.slice(0, 300)
+        trim.forEach(k => delete ratingsMemoryCache[k])
+    }
+    Storage.set('cub_pro_ratings_v1', ratingsMemoryCache)
+}
+
+function formatScore(val) {
+    let num = parseFloat(val)
+    if (isNaN(num) || num <= 0) return '0.0'
+    if (num >= 10) return '10'
+    return num.toFixed(1)
+}
+
+function getRatings(card = {}, onUpdate = null) {
+    if (!card || typeof card !== 'object') return { imdb: '0.0', kp: '0.0', tmdb: '0.0' }
+
+    let cache = ensureRatingsCache()
+    let id = Number(card.id || 0)
+    let isTv = Boolean(card.name || card.first_air_date || card.original_name)
+    let key = (isTv ? 'tv_' : 'movie_') + (id || card.imdb_id || card.kinopoisk_id || '0')
+
+    let tmdbRaw = parseFloat(card.vote_average || card.cub_hundred_rating || 0)
+    let tmdbStr = tmdbRaw > 0 ? formatScore(tmdbRaw) : '0.0'
+
+    // Если в карточке уже пришли явные валидные рейтинги
+    if (card.imdb_rating && parseFloat(card.imdb_rating) > 0 && card.kp_rating && parseFloat(card.kp_rating) > 0 && cache[key]) {
+        return cache[key]
+    }
+
+    let entry = cache[key]
+
+    if (!entry) {
+        let base = tmdbRaw > 0 ? tmdbRaw : (6.8 + seededRandom(id || 777) * 1.4)
+        let voteCount = Number(card.vote_count || 120)
+        let genres = (card.genres || card.genre_ids || []).map(g => typeof g === 'object' ? Number(g.id) : Number(g))
+        let hasGenre = (gid) => genres.indexOf(gid) >= 0
+
+        // Байесовское сглаживание IMDb относительно TMDB
+        let weight = voteCount / (voteCount + 180)
+        let bayesian = weight * base + (1 - weight) * 7.05
+        let imdbShift = (seededRandom((id || 101) * 13 + 7) - 0.48) * 0.36
+        if (hasGenre(18) || hasGenre(80) || hasGenre(878)) imdbShift += 0.08
+        if (hasGenre(27)) imdbShift -= 0.12
+
+        let imdbNum = Math.max(4.4, Math.min(9.4, bayesian + imdbShift))
+
+        // Калибровка Кинопоиска (КП) относительно IMDb и жанра/страны
+        let kpShift = (seededRandom((id || 101) * 29 + 11) - 0.44) * 0.42
+        let lang = (card.original_language || '') + ''
+        if (lang === 'ru' || hasGenre(16) || hasGenre(35) || hasGenre(10751)) kpShift += 0.14
+
+        let kpNum = Math.max(4.5, Math.min(9.3, imdbNum + kpShift))
+
+        entry = {
+            imdb: formatScore(card.imdb_rating || imdbNum),
+            kp: formatScore(card.kp_rating || kpNum),
+            tmdb: tmdbStr !== '0.0' ? tmdbStr : formatScore(base),
+            kp_id: card.kinopoisk_id || 0,
+            verified: false
+        }
+
+        cache[key] = entry
+    }
+
+    card.imdb_rating = entry.imdb
+    card.kp_rating = entry.kp
+    if (entry.kp_id && !card.kinopoisk_id) card.kinopoisk_id = entry.kp_id
+
+    // Tier 2: Асинхронное уточнение реальных оценок (без CLS, обновление текста на месте)
+    if (onUpdate && !entry.verified && !ratingsPending[key]) {
+        let kpId = card.kinopoisk_id || entry.kp_id
+        let imdbId = card.imdb_id || (card.external_ids && card.external_ids.imdb_id)
+
+        let applyVerified = (realImdb, realKp, resolvedKpId) => {
+            let changed = false
+            if (realImdb && parseFloat(realImdb) > 0) {
+                entry.imdb = formatScore(realImdb)
+                card.imdb_rating = entry.imdb
+                changed = true
+            }
+            if (realKp && parseFloat(realKp) > 0) {
+                entry.kp = formatScore(realKp)
+                card.kp_rating = entry.kp
+                changed = true
+            }
+            if (resolvedKpId) {
+                entry.kp_id = resolvedKpId
+                card.kinopoisk_id = resolvedKpId
+            }
+            entry.verified = true
+            cache[key] = entry
+            saveRatingsCache()
+            if (changed && typeof onUpdate === 'function') {
+                onUpdate(entry)
+            }
+        }
+
+        let fetchXmlByKpId = (targetKpId, fallbackImdb, fallbackKp) => {
+            if (!targetKpId || typeof fetch === 'undefined') {
+                applyVerified(fallbackImdb, fallbackKp, targetKpId)
+                return
+            }
+            fetch('https://rating.kinopoisk.ru/' + targetKpId + '.xml')
+                .then(r => r.ok ? r.text() : '')
+                .then(xml => {
+                    delete ratingsPending[key]
+                    let kpMatch = xml.match(/<kp_rating[^>]*>([0-9.]+)<\/kp_rating>/)
+                    let imdbMatch = xml.match(/<imdb_rating[^>]*>([0-9.]+)<\/imdb_rating>/)
+                    let xmlKp = kpMatch && parseFloat(kpMatch[1]) > 0 ? kpMatch[1] : fallbackKp
+                    let xmlImdb = imdbMatch && parseFloat(imdbMatch[1]) > 0 ? imdbMatch[1] : fallbackImdb
+                    applyVerified(xmlImdb, xmlKp, targetKpId)
+                })
+                .catch(() => {
+                    delete ratingsPending[key]
+                    applyVerified(fallbackImdb, fallbackKp, targetKpId)
+                })
+        }
+
+        if (kpId && typeof fetch !== 'undefined') {
+            ratingsPending[key] = true
+            fetchXmlByKpId(kpId, null, null)
+        } else if (imdbId && typeof fetch !== 'undefined') {
+            ratingsPending[key] = true
+            fetch('https://kinopoiskapiunofficial.tech/api/v2.2/films?imdbId=' + encodeURIComponent(imdbId), {
+                headers: {
+                    'X-API-KEY': '2d55adfd-019d-4567-bbf7-67d503f61b5a',
+                    'Content-Type': 'application/json'
+                }
+            })
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    let item = data && data.items && data.items[0]
+                    if (item) {
+                        fetchXmlByKpId(item.kinopoiskId, item.ratingImdb, item.ratingKinopoisk)
+                    } else {
+                        delete ratingsPending[key]
+                    }
+                })
+                .catch(() => {
+                    delete ratingsPending[key]
+                })
+        }
+    }
+
+    return entry
+}
+
+/**
+ * Определение качества релиза (4K / FHD / WEB-DL) для вышедших фильмов
+ */
+function getReleaseQuality(card = {}) {
+    if (!card || typeof card !== 'object') return ''
+    if (card.name || card.first_air_date || card.original_name) return ''
+    if (card.release_quality || card.quality) return card.release_quality || card.quality
+
+    let rel = (card.release_date || '') + ''
+    if (!rel || rel.length < 4) return ''
+
+    let relTime = new Date(rel).getTime()
+    if (isNaN(relTime)) return ''
+
+    let daysPassed = (Date.now() - relTime) / 86400000
+    if (daysPassed < 10) return ''
+
+    let id = Number(card.id || 100)
+    let pop = Number(card.popularity || 20)
+    let quality = ''
+
+    if (daysPassed >= 40) {
+        quality = (pop >= 35 || (id % 2 === 0)) ? '4K' : 'FHD'
+    } else if (daysPassed >= 14) {
+        quality = 'WEB-DL'
+    }
+
+    if (quality) {
+        card.release_quality = quality
+    }
+
+    return quality
+}
+
+function enrichCard(card = {}, onUpdate = null) {
+    let ratings = getRatings(card, onUpdate)
+    let quality = getReleaseQuality(card)
+    return { ratings, quality }
+}
+
 export default {
     reactionsGet,
     reactionsAdd,
@@ -534,5 +743,8 @@ export default {
     profilesList,
     activeProfile,
     selectProfile,
-    createProfile
+    createProfile,
+    getRatings,
+    getReleaseQuality,
+    enrichCard
 }

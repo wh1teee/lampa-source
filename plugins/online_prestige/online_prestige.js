@@ -346,9 +346,13 @@ function startPlugin() {
 
     Lampa.Listener.follow('full',(e)=>{
         if(e.type == 'complite'){
-            let btn = $(Lampa.Lang.translate(button))
+            let render_root = e.object.activity.render()
+            let existing = render_root.find('.view--online')
+            let btn = existing.length ? existing : $(Lampa.Lang.translate(button))
 
-            btn.on('hover:enter',()=>{
+            btn.attr('data-subtitle', 'Collaps / Kinobase / HDRezka / Filmix')
+
+            btn.unbind('hover:enter').on('hover:enter',()=>{
                 resetTemplates()
 
                 Lampa.Component.add('online_prestige', Online)
@@ -365,7 +369,7 @@ function startPlugin() {
                 })
             })
 
-            e.object.activity.render().find('.view--torrent').after(btn)
+            if(!existing.length) render_root.find('.view--torrent').after(btn)
         }
     })
 

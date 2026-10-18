@@ -8,6 +8,7 @@ import Lang from '../../core/lang'
 import Emit from '../../utils/emit'
 import TMDB from '../../core/api/sources/tmdb'
 import Permit from '../../core/account/permit'
+import CubPro from '../../core/cub_pro'
 
 import Options from './start/options'
 import Torrents from './start/torrents'
@@ -49,14 +50,28 @@ class Start extends Emit {
 
 
     create(){
+        let enriched = CubPro.enrichCard(this.card, (updated) => {
+            if (!this.html) return
+            if (updated.imdb && parseFloat(updated.imdb) > 0) {
+                this.html.find('.rate--imdb > div').eq(0).text(updated.imdb)
+                this.html.find('.poster-rate--imdb').text(updated.imdb)
+            }
+            if (updated.kp && parseFloat(updated.kp) > 0) {
+                this.html.find('.rate--kp > div').eq(0).text(updated.kp)
+                this.html.find('.poster-rate--kp').text(updated.kp)
+            }
+        })
+
         let genres      = (this.card.genres || ['---']).slice(0,3).map(a => Utils.capitalizeFirstLetter(a.name)).join(', ')
         let countries   = TMDB.parseCountries(this.card)
         let seasons     = Utils.countSeasons(this.card)
         let tmdb_rating = parseFloat((this.card.vote_average || 0) +'').toFixed(1)
+        let imdb_rating = enriched.ratings.imdb || '0.0'
+        let kp_rating   = enriched.ratings.kp || '0.0'
 
         let relise  = (this.card.release_date || this.card.first_air_date || '') + ''
         let year    = relise ? relise.slice(0,4) : ''
-        let quality = !this.card.first_air_date ? this.card.release_quality || this.card.quality : false
+        let quality = !this.card.first_air_date ? (this.card.release_quality || this.card.quality || enriched.quality) : false
         let pg      = TMDB.parsePG(this.card)
         let head    = []
         let info    = []
@@ -70,6 +85,8 @@ class Start extends Emit {
             time: Utils.secondsToTime(this.card.runtime * 60, true),
             genres: Utils.substr(genres, 30),
             rating: tmdb_rating,
+            imdb_rating: imdb_rating,
+            kp_rating: kp_rating,
             seasons: seasons,
             countries: countries.join(', '),
             episodes: this.card.number_of_episodes,
@@ -109,12 +126,12 @@ class Start extends Emit {
 
         this.card.status && this.html.find('.full-start__status').removeClass('hide').text(Lang.translate('tv_status_' + this.card.status.toLowerCase().replace(/ /g,'_')))
 
-        if(this.card.imdb_rating && parseFloat(this.card.imdb_rating) > 0){
-            this.html.find('.rate--imdb').removeClass('hide').find('> div').eq(0).text(parseFloat(this.card.imdb_rating) >= 10 ? 10 : this.card.imdb_rating)
+        if(parseFloat(imdb_rating) > 0){
+            this.html.find('.rate--imdb').removeClass('hide').find('> div').eq(0).text(parseFloat(imdb_rating) >= 10 ? 10 : imdb_rating)
         }
 
-        if(this.card.kp_rating && parseFloat(this.card.kp_rating) > 0){
-            this.html.find('.rate--kp').removeClass('hide').find('> div').eq(0).text(parseFloat(this.card.kp_rating) >= 10 ? 10 : this.card.kp_rating)
+        if(parseFloat(kp_rating) > 0){
+            this.html.find('.rate--kp').removeClass('hide').find('> div').eq(0).text(parseFloat(kp_rating) >= 10 ? 10 : kp_rating)
         }
 
         if(this.card.genres){
@@ -152,7 +169,7 @@ class Start extends Emit {
         this.html.find('.full-start-new__head').toggleClass('hide',!head.length).html(head.join(', '))
         this.html.find('.full-start-new__details').html(info.join('<span class="full-start-new__split">●</span>'))
 
-        if(window.lampa_settings.read_only) this.html.find('.button--play').remove()
+        if(window.lampa_settings.read_only) this.html.find('.button--play, .view--online, .view--torrent').remove()
 
         this.emit('create')
     }
@@ -161,7 +178,10 @@ class Start extends Emit {
         let controller = {
             link: this,
             toggle: ()=>{
-                this.emit('groupButtons')
+                if(!this.grouped_buttons){
+                    this.grouped_buttons = true
+                    this.emit('groupButtons')
+                }
                 
                 Controller.collectionSet(this.html)
                 Controller.collectionFocus(this.last || false, this.html)

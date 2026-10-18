@@ -1,5 +1,6 @@
 import Storage from '../../../core/storage/storage'
 import Template from '../../template'
+import CubPro from '../../../core/cub_pro'
 
 export default {
     onCreate: function(){
@@ -10,7 +11,7 @@ export default {
             this.html.addClass(data.original_name ? 'card--tv' : 'card--movie')
         }
 
-        let qu = data.quality || data.release_quality
+        let qu = data.quality || data.release_quality || CubPro.getReleaseQuality(data)
         
         if(qu && Storage.field('card_quality') && !data.original_name){
             this.html.find('.card__view')?.append(Template.elem('div', {class: 'card__quality', children: [

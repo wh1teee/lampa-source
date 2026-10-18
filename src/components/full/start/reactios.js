@@ -54,11 +54,7 @@ export default {
 
                     count.text(Utils.bigNumberToShort(r.counter))
 
-                    icon.style.opacity = 0
-
-                    Utils.imgLoad(icon, './img/reactions/' + r.type + '.svg', ()=>{
-                        icon.style.opacity = 1
-                    })
+                    icon.src = './img/reactions/' + r.type + '.svg'
 
                     reaction.append(icon)
                     reaction.append(count)

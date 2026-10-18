@@ -10,10 +10,10 @@ function component(object){
     let files    = new Lampa.Explorer(object)
     let filter   = new Lampa.Filter(object)
     let sources  = {
-        videocdn: videocdn,
-        rezka: rezka,
-        kinobase: kinobase,
         collaps: collaps,
+        kinobase: kinobase,
+        rezka: rezka,
+        videocdn: videocdn,
         filmix: filmix
     }
     
@@ -110,11 +110,11 @@ function component(object){
             Lampa.Storage.set('online_last_balanser', last_select_balanser)
         }
         else{
-            balanser = Lampa.Storage.get('online_balanser', 'filmix')
+            balanser = Lampa.Storage.get('online_balanser', 'collaps')
         }
 
         if(!sources[balanser]){
-            balanser = 'filmix'
+            balanser = 'collaps'
         }
 
         return new sources[balanser](this, object)
@@ -170,13 +170,13 @@ function component(object){
                 if(json.data.length == 1 || object.clarification){
                     this.extendChoice()
 
-                    let kinopoisk_id = json.data[0].kp_id || json.data[0].filmId
+                    let kinopoisk_id = json.data[0].kp_id || json.data[0].filmId || json.data[0].kinopoiskId
 
                     if(kinopoisk_id && source.searchByKinopoisk){
                         source.searchByKinopoisk(object, kinopoisk_id)
                     }
-                    else if(json.data[0].imdb_id && source.searchByImdbID){
-                        source.searchByImdbID(object, json.data[0].imdb_id)
+                    else if((json.data[0].imdb_id || json.data[0].imdbId) && source.searchByImdbID){
+                        source.searchByImdbID(object, json.data[0].imdb_id || json.data[0].imdbId)
                     }
                     else if(source.search){
                         source.search(object, json.data)
@@ -195,7 +195,7 @@ function component(object){
         }
 
         const pillow = (a, c)=>{
-            network.timeout(1000*15)
+            network.timeout(1000*10)
 
             network.native('https://kinopoiskapiunofficial.tech/api/v2.1/films/search-by-keyword?keyword='+encodeURIComponent(query),(json)=>{
                 json.data = json.films
@@ -216,20 +216,26 @@ function component(object){
 
                 source.searchByImdbID(object, imdb_id)
             }
-            else{
-                let url_end = Lampa.Utils.addUrlComponent(url, imdb_id ? 'imdb_id=' + encodeURIComponent(imdb_id) : 'title='+encodeURIComponent(query))
-
-                network.timeout(1000*15)
-                
-                network.native(url_end,(json)=>{
-                    if(json.data && json.data.length) display(json)
-                    else{
-                        network.native(Lampa.Utils.addUrlComponent(url, 'title='+encodeURIComponent(query)),display.bind(this),pillow.bind(this))
+            else if(imdb_id){
+                network.timeout(1000*8)
+                network.native('https://kinopoiskapiunofficial.tech/api/v2.2/films?imdbId='+encodeURIComponent(imdb_id),(json)=>{
+                    if(json && json.items && json.items.length){
+                        json.data = json.items
+                        display(json)
                     }
-                },pillow.bind(this))
+                    else pillow()
+                },pillow.bind(this),false,{
+                    headers: {
+                        'X-API-KEY': '2d55adfd-019d-4567-bbf7-67d503f61b5a'
+                    }
+                })
+            }
+            else{
+                pillow()
             }
         }
 
+        let resolved_imdb = object.movie.imdb_id || (object.movie.external_ids && object.movie.external_ids.imdb_id)
 
         if(source.searchByTitle){
             this.extendChoice()
@@ -241,8 +247,8 @@ function component(object){
 
             source.searchByKinopoisk(object, object.movie.kinopoisk_id)
         }
-        else if(object.movie.imdb_id){
-            letgo(object.movie.imdb_id)
+        else if(resolved_imdb){
+            letgo(resolved_imdb)
         } 
         else if(object.movie.source == 'tmdb' || object.movie.source == 'cub'){
             let tmdburl = (object.movie.name ? 'tv' : 'movie') + '/' + object.movie.id + '/external_ids?api_key=4ef0d7355d9ffb5151e987764708ce96&language=ru'

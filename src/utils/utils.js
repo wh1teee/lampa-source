@@ -583,20 +583,29 @@ function pathToNormalTitle(path, add_exe = true){
     return (name + '').replace(/_|\./g, ' ') + (add_exe ? ' <span class="exe">.'+exe+'</span>' : '')
 }
 
+let hash_cache = new Map()
+
 function hash(input){
     let str  = (input || '') + ''
-    let hash = 0;
+    let len  = str.length
 
-    if (str.length == 0) return hash;
+    if (len === 0) return 0
 
-    for (let i = 0; i < str.length; i++) {
-        let char = str.charCodeAt(i);
+    let cached = hash_cache.get(str)
+    if (cached !== undefined) return cached
 
-        hash = ((hash<<5)-hash)+char;
-        hash = hash & hash; // Convert to 32bit integer
+    let h = 0
+
+    for (let i = 0; i < len; i++) {
+        h = ((h << 5) - h + str.charCodeAt(i)) | 0
     }
 
-    return Math.abs(hash) + '';
+    let res = Math.abs(h) + ''
+
+    if (hash_cache.size > 4096) hash_cache.clear()
+    hash_cache.set(str, res)
+
+    return res
 }
 
 function uid(len){
