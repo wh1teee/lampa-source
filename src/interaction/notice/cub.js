@@ -85,19 +85,18 @@ class NoticeCub extends NoticeClass {
         this.notices = []
 
         Cache.getData('other', 'cub_notice').then(data=>{
-            if(data && Permit.sync) this.notices = data
+            if(data) this.notices = data
         }).catch(e=>{})
 
         Storage.listener.follow('change', (e)=>{
-            if(e.name == 'account' || e.name == 'account_use'){
-                if(!Permit.sync) this.notices = []
-                else this.update()
+            if(e.name == 'account' || e.name == 'account_use' || e.name == 'local_subscribes'){
+                this.update()
             }
         })
 
         Timer.add(1000 * 60 * 5, this.update.bind(this))
 
-        this.update()
+        setTimeout(this.update.bind(this), 700)
     }
 
     update(){
@@ -178,7 +177,7 @@ class NoticeCub extends NoticeClass {
             method: method,
             author: {
                 name: escapeHtml(data.from || ''),
-                img: Utils.protocol() + Manifest.cub_domain + '/img/profiles/' + encodeURIComponent(data.icon || 'l_1') + '.png',
+                img: './img/profiles/' + encodeURIComponent(data.icon || 'l_1') + '.png',
                 text: escapeHtml(data.comment || '')
             },
             data: data,
@@ -195,17 +194,7 @@ class NoticeCub extends NoticeClass {
     }
 
     empty(){
-        let item = super.empty(Lang.translate('empty_title_two'), Lang.translate('notice_none_account'))
-
-        if(!Account.Permit.access){
-            item = super.empty(Lang.translate('account_none_title'), Lang.translate('notice_none'))
-
-            if(Platform.screen('tv')) Utils.qrcode('https://' + Manifest.cub_site, item.find('.notice__img'))
-
-            return item
-        }
-
-        return item
+        return super.empty(Lang.translate('empty_title_two'), Lang.translate('notice_none_account'))
     }
 
     count(){

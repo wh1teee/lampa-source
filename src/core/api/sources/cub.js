@@ -15,6 +15,7 @@ import ContentRows from '../../content_rows'
 import Permit from '../../account/permit'
 import VPN from '../../../core/vpn'
 import Keys from '../../tmdb/keys'
+import CubPro from '../../cub_pro'
 
 let network = new Reguest()
 let day     = 60 * 24
@@ -574,28 +575,36 @@ function trailers(type, oncomplite){
 }
 
 function metadataGet(params, oncomplite){
-    if(window.lampa_settings.disable_features.metadata || !Permit.token) return oncomplite({})
+    if(window.lampa_settings.disable_features.metadata) return oncomplite({})
+    if(!Permit.token) return oncomplite(CubPro.generateMetadata(params.card || params))
     
     network.silent(Utils.protocol() + Manifest.cub_domain + '/api/ai/video-view/' + params.id + '/metadata?type=' + params.method, oncomplite,()=>{
-        oncomplite({})
+        oncomplite(CubPro.generateMetadata(params.card || params))
     }, false, {timeout: 1000 * 5})
 }
 
 function reactionsGet(params, oncomplite){
-    if(window.lampa_settings.disable_features.reactions || !Permit.token) return oncomplite({result: []})
+    if(window.lampa_settings.disable_features.reactions) return oncomplite({result: []})
+    if(!Permit.token) return oncomplite(CubPro.reactionsGet(params, params.card || params))
     
     network.silent(Utils.protocol() + Manifest.cub_domain + '/api/reactions/get/' + params.method + '_' + params.id, oncomplite,()=>{
-        oncomplite({result: []})
+        oncomplite(CubPro.reactionsGet(params, params.card || params))
     }, false, {timeout: 1000 * 5})
 }
 
 function discussGet(params, oncomplite, onerror){
-    if(window.lampa_settings.disable_features.discuss || !Permit.token) return onerror()
+    if(window.lampa_settings.disable_features.discuss) return onerror()
+    if(!Permit.token) return oncomplite(CubPro.buildDiscuss(params, null, params.card || params))
     
-    network.silent(Utils.protocol() + Manifest.cub_domain + '/api/discuss/get/'+params.method+'_'+params.id+'/' + (params.page || 1) + '/' + Storage.field('language'), oncomplite, onerror, false, {timeout: 1000 * 5})
+    network.silent(Utils.protocol() + Manifest.cub_domain + '/api/discuss/get/'+params.method+'_'+params.id+'/' + (params.page || 1) + '/' + Storage.field('language'), oncomplite, ()=>{
+        oncomplite(CubPro.buildDiscuss(params, null, params.card || params))
+    }, false, {timeout: 1000 * 5})
 }
 
 function reactionsAdd(params, oncomplite, onerror){
+    CubPro.reactionsAdd(params)
+    if(!Permit.token) return oncomplite && oncomplite({secuses: true})
+
     network.silent(Utils.protocol() + Manifest.cub_domain + '/api/reactions/add/' + params.method + '_' + params.id + '/' + params.type + '?uid=' + Storage.get('lampa_uid','none'), oncomplite, onerror)
 }
 

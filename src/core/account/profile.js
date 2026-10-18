@@ -16,6 +16,7 @@ import Lang from '../lang'
 import Advert from './modal'
 import Input from '../../interaction/settings/input'
 import Bell from '../../interaction/bell'
+import CubPro from '../cub_pro'
 
 let profile_icon
 
@@ -44,10 +45,12 @@ function init(){
 function update(){
     profile_icon.empty()
 
-    if(Permit.token){
+    if(Permit.token || (Permit.account.profile && Permit.account.profile.id && Permit.account.profile.id !== 1)){
         profile_icon.append(Template.elem('img'))
 
-        Utils.imgLoad(profile_icon.find('img'), Utils.protocol() + Manifest.cub_domain + '/img/profiles/' + (Permit.account.profile.icon || 'l_1') + '.png', ()=>{}, (img)=>{
+        let iconName = (Permit.account.profile && Permit.account.profile.icon) || 'l_1'
+
+        Utils.imgLoad(profile_icon.find('img'), './img/profiles/' + iconName + '.png', ()=>{}, (img)=>{
             img.src = './img/img_load.svg'
         })
     }
@@ -60,7 +63,8 @@ function update(){
  * @returns {string}
  */
 function icon(){
-    return Permit.token ? Utils.protocol() + Manifest.cub_domain + '/img/profiles/' + (Permit.account.profile.icon || 'l_1') + '.png' : ''
+    let iconName = (Permit.profile && Permit.profile.icon) || 'l_1'
+    return './img/profiles/' + iconName + '.png'
 }
 
 /**
@@ -94,7 +98,100 @@ function check(call){
     }
     else{
         Storage.set('account_user','', true)
+        if(call) setTimeout(call, 500)
     }
+}
+
+function showProfileSelector(profiles, callback, isLocal = false){
+    let account = Permit.account
+    let currentProfile = isLocal ? CubPro.activeProfile() : (account.profile || {})
+    let items = Arrays.clone(profiles)
+    let clone = Arrays.clone(profiles)
+
+    items.reverse()
+    clone.reverse()
+
+    let select  = []
+    let maximum = Lampa.Account.hasPremium() ? 8 : 3
+
+    let list = items.map((elem, index)=>{
+        elem.title    = elem.name
+        elem.template = 'selectbox_icon'
+        elem.icon     = '<img src="./img/profiles/' + (elem.icon || 'l_1') + '.png" />'
+        elem.clone    = clone[index]
+        elem.subtitle = elem.main ? Lang.translate('account_profile_main') : elem.child ? Lang.translate('account_profile_child') + ' ' + '(' + Lang.translate('filter_rating_to') + ' ' + (elem.age || 12) + ')' : ''
+
+        elem.selected = currentProfile.id == elem.id
+
+        return elem
+    })
+
+    let additional = {
+        title: Lang.translate('account_profile_add'),
+        template: 'selectbox_icon',
+        icon: '<svg><use xlink:href="#sprite-plus"></use></svg>',
+        ghost: list.length >= maximum,
+        onSelect: (a)=>{
+            callback && callback()
+
+            if(a.ghost){
+                Noty.show(Lang.translate('account_profile_limited').replace('{count}', maximum))
+            }
+            else{
+                let contrioller = Controller.enabled().name
+
+                Input.edit({
+                    title: Lampa.Lang.translate('account_profile_name'),
+                    value: '',
+                    free: true,
+                    nosave: true,
+                    nomic: true
+                },(name)=>{
+                    Controller.toggle(contrioller)
+
+                    if(name){
+                        name = Utils.capitalizeFirstLetter(name)
+
+                        if(isLocal){
+                            CubPro.createProfile(name)
+                            Bell.push({text: Lang.translate('account_profile_created')})
+                        }
+                        else{
+                            Api.load('profiles/create', {}, {name}).then(()=>{
+                                Bell.push({text: Lang.translate('account_profile_created')})
+                            }).catch((e)=>{
+                                Noty.show(Lang.translate(e.decode_code == 200 ? 'account_profile_limited' : 'network_error').replace('{count}', maximum))
+                            })
+                        }
+                    }
+                })
+            }
+        }
+    }
+
+    select = [additional].concat(list)
+
+    Select.show({
+        title: Lang.translate('account_profiles'),
+        items: select,
+        onSelect: (a)=>{
+            if(isLocal){
+                CubPro.selectProfile(a.clone)
+            }
+            else{
+                account.profile = a.clone
+                Storage.set('account', account)
+            }
+
+            callback && callback()
+
+            Listener.send('profile_select', {profile: a.clone})
+        },
+        onBack: callback,
+        onFullDraw: (container)=>{
+            container.append($('<div class="selectbox__text selector"><div>'+Lang.translate('account_profile_info')+'</div></div>'))
+        }
+    })
 }
 
 /**
@@ -104,9 +201,9 @@ function check(call){
  */
 function select(callback){
     ParentalControl.personal('account_profiles',()=>{
-        if(!Permit.token) return Advert.account()
-
-        let account = Permit.account
+        if(!Permit.token){
+            return showProfileSelector(CubPro.profilesList(), callback, true)
+        }
 
         Loading.start(()=>{
             Api.clear()
@@ -118,84 +215,7 @@ function select(callback){
             Loading.stop()
 
             if(result.secuses){
-                let items = Arrays.clone(result.profiles)
-                let clone = Arrays.clone(result.profiles)
-
-                items.reverse()
-                clone.reverse()
-
-                let select  = []
-                let maximum = Lampa.Account.hasPremium() ? 8 : 3
-
-                let list = items.map((elem, index)=>{
-                    elem.title    = elem.name
-                    elem.template = 'selectbox_icon'
-                    elem.icon     = '<img src="' + Utils.protocol() + Manifest.cub_domain +'/img/profiles/'+elem.icon+'.png" />'
-                    elem.clone    = clone[index]
-                    elem.subtitle = elem.main ? Lang.translate('account_profile_main') : elem.child ? Lang.translate('account_profile_child') + ' ' + '(' + Lang.translate('filter_rating_to') + ' ' + (elem.age || 12) + ')' : ''
-
-                    elem.selected = account.profile.id == elem.id
-
-                    return elem
-                })
-
-                
-                let additional = {
-                    title: Lang.translate('account_profile_add'),
-                    template: 'selectbox_icon',
-                    icon: '<svg><use xlink:href="#sprite-plus"></use></svg>',
-                    ghost: list.length >= maximum,
-                    onSelect: (a)=>{
-                        callback && callback()
-
-                        if(a.ghost){
-                            Noty.show(Lang.translate('account_profile_limited').replace('{count}', maximum))
-                        }
-                        else{
-                            let contrioller = Controller.enabled().name
-
-                            Input.edit({
-                                title: Lampa.Lang.translate('account_profile_name'),
-                                value: '',
-                                free: true,
-                                nosave: true,
-                                nomic: true
-                            },(name)=>{
-                                Controller.toggle(contrioller)
-
-                                if(name){
-                                    name = Utils.capitalizeFirstLetter(name)
-
-                                    Api.load('profiles/create', {}, {name}).then((result)=>{
-                                        Bell.push({text: Lang.translate('account_profile_created')})
-                                    }).catch((e)=>{
-                                        Noty.show(Lang.translate(e.decode_code == 200 ? 'account_profile_limited' : 'network_error').replace('{count}', maximum))
-                                    })
-                                }
-                            })
-                        }
-                    }
-                }
-                
-                select = [additional].concat(list)
-
-                Select.show({
-                    title: Lang.translate('account_profiles'),
-                    items: select,
-                    onSelect: (a)=>{
-                        account.profile = a.clone
-
-                        Storage.set('account', account)
-
-                        callback && callback()
-
-                        Listener.send('profile_select', {profile: account.profile})
-                    },
-                    onBack: callback,
-                    onFullDraw: (container)=>{
-                        container.append($('<div class="selectbox__text selector"><div>'+Lang.translate('account_profile_info')+'</div></div>'))
-                    }
-                })
+                showProfileSelector(result.profiles, callback, false)
             }
             else{
                 Noty.show(result.text)

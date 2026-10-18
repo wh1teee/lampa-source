@@ -15,6 +15,7 @@ import Router from '../../router'
 import Permit from '../../account/permit'
 import VPN from '../../../core/vpn'
 import Keys from '../../tmdb/keys'
+import CubPro from '../../cub_pro'
 
 
 let network   = new Reguest()
@@ -675,8 +676,15 @@ function full(params = {}, oncomplite, onerror){
 
     let single_request = !Storage.field('proxy_tmdb')
     let append_fields  = single_request
-        ? 'credits,recommendations,similar,videos,content_ratings,release_dates,external_ids,keywords,alternative_titles,images&include_image_language=' + image_languages + '&include_video_language=' + image_languages
-        : 'content_ratings,release_dates,external_ids,keywords,alternative_titles,images&include_image_language=' + image_languages
+        ? 'credits,recommendations,similar,videos,reviews,content_ratings,release_dates,external_ids,keywords,alternative_titles,images&include_image_language=' + image_languages + '&include_video_language=' + image_languages
+        : 'reviews,content_ratings,release_dates,external_ids,keywords,alternative_titles,images&include_image_language=' + image_languages
+
+    let use_local_cub = !Permit.token
+
+    if(use_local_cub){
+        if(!window.lampa_settings.disable_features.discuss && window.lampa_settings.account_use && !Permit.child) status.need++
+        if(!window.lampa_settings.disable_features.metadata) status.need++
+    }
 
     get(params.method+'/'+params.id+'?append_to_response='+append_fields,params,(json)=>{
         json.source = 'tmdb'
@@ -684,6 +692,9 @@ function full(params = {}, oncomplite, onerror){
         if(json.external_ids){
             json.imdb_id = json.external_ids.imdb_id
         }
+
+        let tmdb_reviews = json.reviews
+        delete json.reviews
 		
         if (!json.overview?.trim() && Storage.field('tmdb_lang') !== 'en') {
             get(params.method + '/' + params.id, { langs: 'en' }, (enjson) => {
@@ -742,9 +753,26 @@ function full(params = {}, oncomplite, onerror){
             }
         }
 
+        if(use_local_cub){
+            status.append('reactions', window.lampa_settings.disable_features.reactions ? {result: []} : CubPro.reactionsGet(params, json))
+
+            if(!window.lampa_settings.disable_features.discuss && window.lampa_settings.account_use && !Permit.child){
+                status.append('discuss', CubPro.buildDiscuss(params, tmdb_reviews, json))
+            }
+
+            if(!window.lampa_settings.disable_features.metadata){
+                status.append('metadata', CubPro.generateMetadata(json))
+            }
+        }
+
         status.append('movie', json)
     },()=>{
         status.need -= (single_request ? 7 : 3)
+        if(use_local_cub){
+            status.need--
+            if(!window.lampa_settings.disable_features.discuss && window.lampa_settings.account_use && !Permit.child) status.need--
+            if(!window.lampa_settings.disable_features.metadata) status.need--
+        }
 
         status.error()
     }, {life: day * 7})
@@ -777,24 +805,26 @@ function full(params = {}, oncomplite, onerror){
         }
     }
 
-    Api.sources.cub.reactionsGet(params,(json)=>{
-        status.append('reactions', json)
-    })
+    if(!use_local_cub){
+        Api.sources.cub.reactionsGet(params,(json)=>{
+            status.append('reactions', json)
+        })
 
-    if(Permit.token && Lang.selected(['ru','uk','be']) && window.lampa_settings.account_use && !Permit.child){
-        status.need++
+        if(Permit.token && Lang.selected(['ru','uk','be']) && window.lampa_settings.account_use && !Permit.child){
+            status.need++
 
-        Api.sources.cub.discussGet(params, (json)=>{
-            status.append('discuss', json)
-        },status.error.bind(status))
-    }
+            Api.sources.cub.discussGet(params, (json)=>{
+                status.append('discuss', json)
+            },status.error.bind(status))
+        }
 
-    if(Permit.token && params.method == 'movie'){
-        status.need++
+        if(Permit.token && params.method == 'movie'){
+            status.need++
 
-        Api.sources.cub.metadataGet(params, (json)=>{
-            status.append('metadata', json)
-        },status.error.bind(status))
+            Api.sources.cub.metadataGet(params, (json)=>{
+                status.append('metadata', json)
+            },status.error.bind(status))
+        }
     }
 }
 

@@ -9,6 +9,7 @@ import Storage from '../../../core/storage/storage'
 import Account from '../../../core/account/account'
 import Manifest from '../../../core/manifest'
 import Arrays from '../../../utils/arrays'
+import CubPro from '../../../core/cub_pro'
 
 export default {
     onCreate: function(){
@@ -50,7 +51,11 @@ export default {
 
         if(window.lampa_settings.account_use){
             this.html.find('.button--subscribe').on('hover:enter',()=>{
-                if(!Account.Permit.access) return Account.Modal.account()
+                if(!Account.Permit.access){
+                    this.subscribed = CubPro.personToggle(this.data)
+                    this.emit('subscribe', this.subscribed)
+                    return
+                }
                 
                 let subscribes = Storage.get('person_subscribes_id','[]')
 

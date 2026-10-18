@@ -12,6 +12,7 @@ import Device from './device'
 import Api from './api'
 import Modal from './modal'
 import Timer from '../timer'
+import CubPro from '../cub_pro'
 
 let network = new Reguest()
 let user_data
@@ -23,7 +24,7 @@ let user_data
 function init(){
     if(!window.lampa_settings.account_use) return
 
-    console.log('Account','use', Permit.token ? Permit.account.email : 'no account')
+    console.log('Account','use', Permit.token ? Permit.account.email : 'autonomous CubPro')
 
     Timeline.init()
     Bookmarks.init()
@@ -97,6 +98,7 @@ let Account = {
     Timeline,
     Permit,
     Modal,
+    CubPro,
 
     listener: Listener,
     network,
@@ -208,7 +210,7 @@ Object.defineProperty(Account, 'hasPremium', {
 
         if(Storage.get('developer_nopremium', 'false')) return 0
 
-        return user.id ? Utils.countDays(Date.now(), user.premium) : 0
+        return user.id ? Utils.countDays(Date.now(), user.premium) : 365
     },
     writable: false
 })

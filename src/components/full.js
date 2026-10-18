@@ -50,7 +50,7 @@ function component(object){
     comp.use({
         onCreate: function(){
             this.tv   = Platform.screen('tv')
-            this.view = 3
+            this.view = 5
             this.rows = ['start', 'description']
 
             this.html.addClass('layer--wheight')

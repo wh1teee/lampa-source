@@ -6,6 +6,7 @@ import Select from '../../../interaction/select'
 import Controller from '../../../core/controller'
 import Lang from '../../../core/lang'
 import Bell from '../../bell'
+import CubPro from '../../../core/cub_pro'
 
 export default {
     onCreate: function(){
@@ -14,7 +15,7 @@ export default {
             let voited    = Storage.cache('discuss_voited', 100, [])
             let contoller = Controller.enabled().name
 
-            if(voited.indexOf(this.data.id) == -1 && Account.Permit.access){
+            if(voited.indexOf(this.data.id) == -1){
                 items = [
                     {
                         separator: true,
@@ -44,16 +45,17 @@ export default {
                 onSelect: (item)=>{
                     Controller.toggle(contoller)
 
-                    Account.Api.load('discuss/voite', {}, {
-                        id: this.data.id, 
-                        like: item.like
-                    }).then(()=>{
-                        Storage.add('discuss_voited', this.data.id)
-                    
-                        this.emit('updateLiked', item.like)
+                    CubPro.voteDiscuss(this.data.id, item.like)
+                    Storage.add('discuss_voited', this.data.id)
+                    this.emit('updateLiked', item.like)
+                    Bell.push({text: Lang.translate('discuss_voited')})
 
-                        Bell.push({text: Lang.translate('discuss_voited')})
-                    }).catch(()=>{})
+                    if(Account.Permit.access){
+                        Account.Api.load('discuss/voite', {}, {
+                            id: this.data.id, 
+                            like: item.like
+                        }).catch(()=>{})
+                    }
                 },
                 onBack: ()=>{
                     Controller.toggle(contoller)

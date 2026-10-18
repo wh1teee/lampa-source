@@ -56,7 +56,7 @@ export default {
 
                     icon.style.opacity = 0
 
-                    Utils.imgLoad(icon, Utils.protocol() + Manifest.cub_domain + '/img/reactions/' + r.type + '.svg', ()=>{
+                    Utils.imgLoad(icon, './img/reactions/' + r.type + '.svg', ()=>{
                         icon.style.opacity = 1
                     })
 
@@ -82,7 +82,7 @@ export default {
 
         items.forEach(a=>{
             a.template = 'selectbox_icon',
-            a.icon     = '<img src="'+Utils.protocol() + Manifest.cub_domain + '/img/reactions/' + a.type + '.svg'+'" />'
+            a.icon     = '<img src="./img/reactions/' + a.type + '.svg" />'
             a.ghost    = vote(a.type)
             a.noenter  = a.ghost
             a.title    = Lang.translate('reactions_' + a.type)

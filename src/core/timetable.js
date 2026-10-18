@@ -66,10 +66,11 @@ function init(){
         } 
     })
 
-    // Начальный импорт из закладок
-    favorites()
-
-    loadEpisodes()
+    // Начальный импорт из закладок и кеша откладываем с критического пути старта
+    setTimeout(()=>{
+        favorites()
+        loadEpisodes()
+    }, 600)
 
     ContentRows.add({
         name: 'timetable_lately',
@@ -203,7 +204,7 @@ function saveData(){
  * Добавить из закладок
  */
 function favorites(){
-    let category = ['like', 'wath', 'book', 'look', 'viewed', 'scheduled', 'continued']
+    let category = ['like', 'wath', 'book', 'look', 'viewed', 'scheduled', 'continued', 'history']
 
     category.forEach(a=>{
         add(Favorite.get({type: a}), a)
@@ -232,7 +233,7 @@ function filter(episodes){
  */
 function parse(to_database){
     let check = Favorite.check(object)
-    let any   = Favorite.checkAnyNotHistory(check)
+    let any   = Favorite.checkAnyNotHistory(check) || check.history
 
     if(any || to_database){
         // Если нет сезонов или давно не обновляли количество сезонов

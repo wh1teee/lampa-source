@@ -1,4 +1,5 @@
 import Storage from '../storage/storage'
+import CubPro from '../cub_pro'
 
 let permit = {}
 
@@ -9,7 +10,7 @@ Object.defineProperty(permit, 'account', {
 
 // Получить профиль аккаунта
 Object.defineProperty(permit, 'profile', { 
-    get: ()=> permit.account.profile || {}
+    get: ()=> permit.account.profile || CubPro.activeProfile()
 })
 
 // Получить данные пользователя
@@ -39,12 +40,12 @@ Object.defineProperty(permit, 'sync', {
 
 // Детский профиль
 Object.defineProperty(permit, 'child', { 
-    get: ()=>  permit.access && permit.profile.child
+    get: ()=>  Boolean(permit.profile && permit.profile.child)
 })
 
 // Детский профиль - маленький ребенок (до 14 лет)
 Object.defineProperty(permit, 'child_small', { 
-    get: ()=>  permit.child ? permit.profile.age <= 14 : false
+    get: ()=>  permit.child ? (permit.profile.age || 12) <= 14 : false
 })
 
 export default permit

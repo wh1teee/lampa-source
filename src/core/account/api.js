@@ -5,6 +5,7 @@ import Reguest from '../../utils/reguest'
 import Arrays from '../../utils/arrays'
 import Storage from '../storage/storage'
 import Modal from './modal'
+import CubPro from '../cub_pro'
 
 let network = new Reguest()
 
@@ -36,14 +37,23 @@ function load(path, params = {}, post = false){
 }
 
 function persons(secuses, error){
-    if(Permit.access && !window.lampa_settings.disable_features.persons){
+    if(window.lampa_settings.disable_features.persons){
+        if(error) error({decode_code: 403})
+        return
+    }
+
+    if(Permit.access){
         load('person/list').then((data)=>{
             Storage.set('person_subscribes_id', data.results.map(a=>a.person_id))
 
             if(secuses) secuses(data.results)
         }).catch(error ? error : ()=>{})
     }
-    else if(error) error({decode_code: 403})
+    else{
+        let results = CubPro.personsList()
+        Storage.set('person_subscribes_id', results.map(a=>a.person_id))
+        if(secuses) secuses(results)
+    }
 }
 
 function user(secuses, error){
@@ -99,7 +109,11 @@ function notices(call){
             call([])
         })
     }
-    else call([])
+    else{
+        let localNotices = CubPro.noticesList()
+        Storage.set('account_notice', localNotices)
+        call(localNotices)
+    }
 }
 
 function subscribes(params = {}, secuses, error){
@@ -128,7 +142,10 @@ function subscribes(params = {}, secuses, error){
             }
         }).catch(error ? error : ()=>{})
     }
-    else if(error) error({decode_code: 403})
+    else{
+        let res = CubPro.subscribesList(params)
+        if(secuses) secuses(res)
+    }
 }
 
 function subscribeToTranslation(params = {}, call, error){
@@ -142,6 +159,10 @@ function subscribeToTranslation(params = {}, call, error){
             if(result.limited) Modal.limited()
             else if(call) call()
         }).catch(error ? error : ()=>{})
+    }
+    else if(params.voice){
+        CubPro.subscribeToTranslation(params)
+        if(call) call()
     }
     else if(error) error({decode_code: 403})
 }

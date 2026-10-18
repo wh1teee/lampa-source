@@ -33,7 +33,7 @@ function disable(){
 }
 
 function isEnter(keycode){
-	return keycode == 13 || keycode == 29443 || keycode == 117 || keycode == 65385
+	return keycode == 13 || keycode == 23 || keycode == 29443 || keycode == 117 || keycode == 65385
 }
 
 function keyCode(e){

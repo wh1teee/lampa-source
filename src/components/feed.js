@@ -81,10 +81,74 @@ function Feed(object){
     }
     
     
+    function loadTmdbFeed(oncomplite, onerror){
+        let items = []
+        let done = 0
+        let total = 3
+
+        let check = ()=>{
+            done++
+            if(done >= total){
+                if(items.length) oncomplite({ result: items, direct_tmdb: true })
+                else onerror()
+            }
+        }
+
+        Api.sources.tmdb.get('trending/all/day', {}, (json)=>{
+            let list = (json && json.results) || []
+            list.slice(0, 12).forEach((card, idx)=>{
+                if(!card.poster_path || !card.backdrop_path) return
+                card.source = 'tmdb'
+                card.imdb_rating = card.vote_average ? card.vote_average.toFixed(1) : ''
+                items.push({
+                    type: idx < 4 ? 'popular' : 'now_playing',
+                    card_id: card.id,
+                    card_type: card.name || card.first_air_date ? 'tv' : 'movie',
+                    data: card
+                })
+            })
+            check()
+        }, check, {life: 60 * 6})
+
+        Api.sources.tmdb.get('tv/on_the_air', {}, (json)=>{
+            let list = (json && json.results) || []
+            list.slice(0, 10).forEach((card)=>{
+                if(!card.poster_path || !card.backdrop_path) return
+                if(items.find(a=>a.card_id == card.id)) return
+                card.source = 'tmdb'
+                card.imdb_rating = card.vote_average ? card.vote_average.toFixed(1) : ''
+                items.push({
+                    type: 'now',
+                    card_id: card.id,
+                    card_type: 'tv',
+                    data: card
+                })
+            })
+            check()
+        }, check, {life: 60 * 6})
+
+        Api.sources.tmdb.get('movie/top_rated', {}, (json)=>{
+            let list = (json && json.results) || []
+            list.slice(0, 10).forEach((card)=>{
+                if(!card.poster_path || !card.backdrop_path) return
+                if(items.find(a=>a.card_id == card.id)) return
+                card.source = 'tmdb'
+                card.imdb_rating = card.vote_average ? card.vote_average.toFixed(1) : ''
+                items.push({
+                    type: 'top',
+                    card_id: card.id,
+                    card_type: 'movie',
+                    data: card
+                })
+            })
+            check()
+        }, check, {life: 60 * 24})
+    }
+
     this.create = function(){
         this.activity.loader(true)
 
-        network.silent(Utils.protocol() + Manifest.cub_domain + '/api/feed/all',this.build.bind(this),()=>{
+        loadTmdbFeed(this.build.bind(this), ()=>{
             let empty = new Empty()
 
             html.append(empty.render(true))
@@ -211,7 +275,7 @@ function Feed(object){
     }
 
     this.build = function(data){
-        enrichTmdbFeed(data.result || [], (result)=>{
+        let finishBuild = (result)=>{
             feed = result
 
             html.addClass('feed')
@@ -240,7 +304,10 @@ function Feed(object){
             this.activity.loader(false)
 
             this.activity.toggle()
-        })
+        }
+
+        if(data.direct_tmdb) finishBuild(data.result || [])
+        else enrichTmdbFeed(data.result || [], finishBuild)
     }
 
 
