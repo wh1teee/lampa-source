@@ -416,7 +416,7 @@ function backward(){
 
     let previous_tree = activites.slice(-maxsave)
 
-    if(previous_tree.length > (maxsave - 1)){
+    if(previous_tree.length > (maxsave - 1) && !previous_tree[0].activity){
         create(previous_tree[0])
     }
 
@@ -472,19 +472,25 @@ function extractObject(object){
 function start(object){
     Head.title(object.title)
 
-    if(object.activity.is_stopped){
-        slides.append(object.activity.render(true))
+    let slide_node = object.activity.render(true)
+
+    if(object.activity.is_stopped && !slide_node.parentNode){
+        slides.append(slide_node)
     }
+
+    Array.from(slides.children).forEach(slide=>{
+        if(slide !== slide_node && slide.hasClass('activity--active')){
+            slide.removeClass('activity--active')
+            slide.setAttribute('aria-hidden', 'true')
+        }
+    })
+
+    slide_node.setAttribute('aria-hidden', 'false')
+    object.activity.render().addClass('activity--active')
 
     object.activity.start()
 
     save(object)
-
-    Array.from(slides.children).forEach(slide=>{
-        slide.hasClass('activity--active') && slide.removeClass('activity--active')
-    })
-
-    object.activity.render().addClass('activity--active')
 
     Lampa.Listener.send('activity',{component: object.component, type: 'start', object})
 }

@@ -57,6 +57,14 @@
         &-collection{
             min-height: 15em;
         }
+    }
+
+    &:nth-child(n+4){
+        content-visibility: auto;
+        contain-intrinsic-size: auto none auto 24em;
+    }
+
+    &--type{
         &-player-cards{
             .items-line__head{
                 padding-left: 0.8em;

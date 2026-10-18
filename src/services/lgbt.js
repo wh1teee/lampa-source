@@ -9,38 +9,7 @@ import Arrays from '../utils/arrays'
  * @returns {void}
  */
 function init(){
-    if(!window.lampa_settings.disable_features.lgbt){
-        Cache.getData('other', 'lgbt', 60 * 24 * 10).then((result)=>{
-            if(result && Arrays.isObject(result)) window.lampa_settings.lgbt = result
-            else{
-                Lampa.Network.silent(Utils.protocol() + 'tmdb.'+Manifest.cub_domain+'/lgbt.json',(lgbt)=>{
-                    let map = {}
-
-                    lgbt.forEach(item=>{
-                        map[item.id + '_' + item.type] = true
-                    })
-
-                    window.lampa_settings.lgbt = map
-
-                    Cache.rewriteData('other', 'lgbt', map).catch((e)=>{})
-                })
-            }
-        }).catch(e=>{})
-
-        if(!VPN.is(['ru', 'by'])){
-            Lampa.SettingsApi.addParam({
-                component: 'more',
-                param: {
-                    name: 'lgbt_content_block',
-                    type: 'trigger',
-                    default: false
-                },
-                field: {
-                    name: Lampa.Lang.translate('settings_lgbt_content_block'),
-                }
-            })
-        }
-    }
+    // Disabled external CUB lgbt.json fetch
 }
 
 export default {

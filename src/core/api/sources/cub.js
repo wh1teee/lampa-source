@@ -574,7 +574,7 @@ function trailers(type, oncomplite){
 }
 
 function metadataGet(params, oncomplite){
-    if(window.lampa_settings.disable_features.metadata) return oncomplite({})
+    if(window.lampa_settings.disable_features.metadata || !Permit.token) return oncomplite({})
     
     network.silent(Utils.protocol() + Manifest.cub_domain + '/api/ai/video-view/' + params.id + '/metadata?type=' + params.method, oncomplite,()=>{
         oncomplite({})
@@ -582,7 +582,7 @@ function metadataGet(params, oncomplite){
 }
 
 function reactionsGet(params, oncomplite){
-    if(window.lampa_settings.disable_features.reactions) return oncomplite({result: []})
+    if(window.lampa_settings.disable_features.reactions || !Permit.token) return oncomplite({result: []})
     
     network.silent(Utils.protocol() + Manifest.cub_domain + '/api/reactions/get/' + params.method + '_' + params.id, oncomplite,()=>{
         oncomplite({result: []})
@@ -590,7 +590,7 @@ function reactionsGet(params, oncomplite){
 }
 
 function discussGet(params, oncomplite, onerror){
-    if(window.lampa_settings.disable_features.discuss) return onerror()
+    if(window.lampa_settings.disable_features.discuss || !Permit.token) return onerror()
     
     network.silent(Utils.protocol() + Manifest.cub_domain + '/api/discuss/get/'+params.method+'_'+params.id+'/' + (params.page || 1) + '/' + Storage.field('language'), oncomplite, onerror, false, {timeout: 1000 * 5})
 }

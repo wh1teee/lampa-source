@@ -148,15 +148,9 @@ function frameUpdate(render){
 
     // Check for 'always' menu mode to determine the layout offset
     let menu_offset = document.body.classList.contains('menu--always') ? menu_width : 0
+    let target_width = window.innerWidth - (Platform.screen('light') && menu_left == 0 ? menu_width : menu_offset) - navi_width
 
-    for(let i = 0; i < layer_width.length; i++){
-        let elem = layer_width[i],
-            read = parseFloat(elem.style.width),
-			widh = window.innerWidth - (Platform.screen('light') && menu_left == 0 ? menu_width : menu_offset) - navi_width
-
-        if(read !== widh) layer_width[i].style.width = widh
-    }
-
+    let wheight_targets = []
     for(let i = 0; i < layer_wheight.length; i++){
         let elem = layer_wheight[i],
             heig = window.innerHeight - head_height - navi_height,
@@ -167,9 +161,10 @@ function frameUpdate(render){
             heig -= attr.getBoundingClientRect().height
         }
 
-        if(read !== heig) elem.style.height = heig
+        if(read !== heig) wheight_targets.push({ elem, heig })
     }
 
+    let height_targets = []
     for(let i = 0; i < layer_height.length; i++){
         let elem = layer_height[i],
             heig = window.innerHeight,
@@ -180,7 +175,22 @@ function frameUpdate(render){
             heig -= attr.getBoundingClientRect().height
         }
 
-        if(read !== heig) elem.style.height = heig
+        if(read !== heig) height_targets.push({ elem, heig })
+    }
+
+    for(let i = 0; i < layer_width.length; i++){
+        let elem = layer_width[i],
+            read = parseFloat(elem.style.width)
+
+        if(read !== target_width) elem.style.width = target_width
+    }
+
+    for(let i = 0; i < wheight_targets.length; i++){
+        wheight_targets[i].elem.style.height = wheight_targets[i].heig
+    }
+
+    for(let i = 0; i < height_targets.length; i++){
+        height_targets[i].elem.style.height = height_targets[i].heig
     }
 }
 
@@ -206,7 +216,7 @@ function frameVisible(){
         for(let i = 0; i < elems.length; i++){
             let elem = elems[i]
 
-            if(!elem.call_visible){
+            if(!elem.call_visible && !(elem.called_visible && elem.visibility === 'visible')){
                 elem.bond = elem.getBoundingClientRect()
 
                 // определяем в какую ячейку попадает элемент
@@ -279,7 +289,7 @@ function combineElements(find_class, elements, combine){
         Array.from(target.querySelectorAll('.' + find_class))
     )
 
-    elems.filter(elem=>elements.indexOf(elem) < 0)
+    elems = elems.filter(elem=>elements.indexOf(elem) < 0)
 
     return [].concat(elements, elems)
 }

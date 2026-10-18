@@ -673,7 +673,12 @@ function full(params = {}, oncomplite, onerror){
 
     if(Utils.dcma(params.method, params.id)) return onerror()
 
-    get(params.method+'/'+params.id+'?append_to_response=content_ratings,release_dates,external_ids,keywords,alternative_titles,images&include_image_language='+image_languages,params,(json)=>{
+    let single_request = !Storage.field('proxy_tmdb')
+    let append_fields  = single_request
+        ? 'credits,recommendations,similar,videos,content_ratings,release_dates,external_ids,keywords,alternative_titles,images&include_image_language=' + image_languages + '&include_video_language=' + image_languages
+        : 'content_ratings,release_dates,external_ids,keywords,alternative_titles,images&include_image_language=' + image_languages
+
+    get(params.method+'/'+params.id+'?append_to_response='+append_fields,params,(json)=>{
         json.source = 'tmdb'
 
         if(json.external_ids){
@@ -709,44 +714,74 @@ function full(params = {}, oncomplite, onerror){
         }
         else status.need--
 
+        if(single_request){
+            if(!Permit.child_small){
+                let credits = json.credits || {cast: [], crew: []}
+                let recomend = json.recommendations || {results: []}
+                let simular = json.similar || {results: []}
+                let vids = json.videos || {results: []}
+
+                delete json.credits
+                delete json.recommendations
+                delete json.similar
+                delete json.videos
+
+                status.append('persons', credits)
+                status.append('recomend', recomend)
+                status.append('simular', simular)
+
+                if(!Permit.child){
+                    status.append('videos', vids)
+                }
+                else{
+                    status.need--
+                }
+            }
+            else{
+                status.need -= 4
+            }
+        }
+
         status.append('movie', json)
     },()=>{
-        status.need -= 2
+        status.need -= (single_request ? 7 : 3)
 
         status.error()
     }, {life: day * 7})
 
-    if(!Permit.child_small){
-        get(params.method+'/'+params.id+'/credits',params,(json)=>{
-            status.append('persons', json)
-        },status.error.bind(status), {life: day * 7})
+    if(!single_request){
+        if(!Permit.child_small){
+            get(params.method+'/'+params.id+'/credits',params,(json)=>{
+                status.append('persons', json)
+            },status.error.bind(status), {life: day * 7})
 
-        get(params.method+'/'+params.id+'/recommendations',params,(json)=>{
-            status.append('recomend', json)
-        },status.error.bind(status), {life: day * 7})
+            get(params.method+'/'+params.id+'/recommendations',params,(json)=>{
+                status.append('recomend', json)
+            },status.error.bind(status), {life: day * 7})
 
-        get(params.method+'/'+params.id+'/similar',params,(json)=>{
-            status.append('simular', json)
-        },status.error.bind(status), {life: day * 7})
+            get(params.method+'/'+params.id+'/similar',params,(json)=>{
+                status.append('simular', json)
+            },status.error.bind(status), {life: day * 7})
 
-        if(!Permit.child){
-            videos(params, (json)=>{
-                status.append('videos', json)
-            },status.error.bind(status))
+            if(!Permit.child){
+                videos(params, (json)=>{
+                    status.append('videos', json)
+                },status.error.bind(status))
+            }
+            else{
+                status.need--
+            }
         }
         else{
-            status.need--
+            status.need -= 4
         }
-    }
-    else{
-        status.need -= 4
     }
 
     Api.sources.cub.reactionsGet(params,(json)=>{
         status.append('reactions', json)
     })
 
-    if(Lang.selected(['ru','uk','be']) && window.lampa_settings.account_use && !Permit.child){
+    if(Permit.token && Lang.selected(['ru','uk','be']) && window.lampa_settings.account_use && !Permit.child){
         status.need++
 
         Api.sources.cub.discussGet(params, (json)=>{
@@ -754,7 +789,7 @@ function full(params = {}, oncomplite, onerror){
         },status.error.bind(status))
     }
 
-    if(params.method == 'movie'){
+    if(Permit.token && params.method == 'movie'){
         status.need++
 
         Api.sources.cub.metadataGet(params, (json)=>{

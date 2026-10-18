@@ -8,6 +8,11 @@ export default {
 
         this.img_poster = im[0] || {}
 
+        if(im[0] && im[0].setAttribute){
+            im[0].setAttribute('fetchpriority', 'high')
+            im[0].decoding = 'async'
+        }
+
         if(window.innerWidth <= 480){
             this.img_poster = new Image()
             this.img_poster.crossOrigin = "Anonymous"
@@ -48,24 +53,21 @@ export default {
                     },500)
 
                     let sc = this.html.parents('.scroll')[0]
-                    let an = 0
+                    let raf_pending = false
                     let ts = 0
                     let dl = window.innerHeight * 0.1
 
                     let smoothParallax = ()=>{
+                        raf_pending = false
                         im[0].style.transform = 'translate3d(0, ' + ts * 0.35 + 'px, 0)'
                         im[0].style.opacity   = ts >= dl ? Math.max(0, 1 - (ts - dl) / (window.innerHeight * 0.2)) : 1;
-
-                        an--
-
-                        if(an > 0) smoothParallax()
                     }
 
                     if(sc) sc.on('scroll', function(e) {
                         ts = sc.scrollTop
                         
-                        if(an == 0){
-                            an = 100
+                        if(!raf_pending){
+                            raf_pending = true
 
                             requestAnimationFrame(smoothParallax)
                         }

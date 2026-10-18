@@ -1,13 +1,13 @@
 import Blur from './blur'
 
 var canvas = document.createElement('canvas'),
-	ctx    = canvas.getContext('2d')
+	ctx    = canvas.getContext('2d', { willReadFrequently: true })
 
 canvas.width  = 30
 canvas.height = 17
 
 var canvas_poster = document.createElement('canvas'),
-	ctx_poster    = canvas_poster.getContext('2d')
+	ctx_poster    = canvas_poster.getContext('2d', { willReadFrequently: true })
 
 function extract(img_data){
     let data   = img_data.data,
@@ -186,19 +186,19 @@ function blur(img, callback){
     let nw = img.width * ratio,
 		nh = img.height * ratio
 
+    if(typeof ctx.filter === 'string'){
+        ctx.save()
+        ctx.filter = 'blur(16px)'
+        ctx.drawImage(img, -(nw-canvas.width) / 2, -(nh-canvas.height) / 2, nw, nh)
+        ctx.restore()
+        callback(canvas)
+        return
+    }
+
     ctx.drawImage(img, -(nw-canvas.width) / 2, -(nh-canvas.height) / 2, nw, nh)
     
     Blur.canvasRGB(canvas, 0, 0, canvas.width, canvas.height, 80,()=>{
-        let nimg = new Image()
-
-        try{
-            nimg.src = canvas.toDataURL()
-        }
-        catch(e){}
-
-        setTimeout(()=>{
-            callback(nimg)
-        },100)
+        callback(canvas)
     })
 }
 
