@@ -2,11 +2,6 @@
 
 .torrent-list{
     padding: 0 $offset;
-
-    > .torrent-item:nth-child(n+9){
-        content-visibility: auto;
-        contain-intrinsic-size: auto none auto 96px;
-    }
 }
 
 .torrent-files{

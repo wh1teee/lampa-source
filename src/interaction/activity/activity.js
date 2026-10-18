@@ -472,20 +472,14 @@ function extractObject(object){
 function start(object){
     Head.title(object.title)
 
-    let slide_node = object.activity.render(true)
-
-    if(object.activity.is_stopped && !slide_node.parentNode){
-        slides.append(slide_node)
+    if(object.activity.is_stopped){
+        slides.append(object.activity.render(true))
     }
 
     Array.from(slides.children).forEach(slide=>{
-        if(slide !== slide_node && slide.hasClass('activity--active')){
-            slide.removeClass('activity--active')
-            slide.setAttribute('aria-hidden', 'true')
-        }
+        if(slide.hasClass('activity--active')) slide.removeClass('activity--active')
     })
 
-    slide_node.setAttribute('aria-hidden', 'false')
     object.activity.render().addClass('activity--active')
 
     object.activity.start()

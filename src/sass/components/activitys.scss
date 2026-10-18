@@ -45,15 +45,6 @@
         }
     }
 
-    &[aria-hidden="true"]:not(.activity--active){
-        content-visibility: hidden;
-        pointer-events: none;
-
-        @supports not (content-visibility: hidden){
-            display: none;
-        }
-    }
-
     &--active{
         opacity: 1;
         z-index: 1;

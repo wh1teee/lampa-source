@@ -69,6 +69,7 @@ class Base extends Emit{
 
                 this.emit('toggle')
             },
+            update: ()=>{},
             right: ()=>{
                 if(Navigator.canmove('right')) Navigator.move('right')
             },

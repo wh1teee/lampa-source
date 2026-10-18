@@ -68,6 +68,8 @@ function init(){
 
 function toggleMobile(){
     $('body').toggleClass('true--mobile', Platform.screen('mobile'))
+    $('body').toggleClass('touch-device', Platform.screen('mobile'))
+    $('body').toggleClass('mouse--controll', Platform.mouse())
 }
 
 function toggleOrientation(){
@@ -148,7 +150,7 @@ function frameUpdate(render){
 
     // Check for 'always' menu mode to determine the layout offset
     let menu_offset = document.body.classList.contains('menu--always') ? menu_width : 0
-    let target_width = window.innerWidth - (Platform.screen('light') && menu_left == 0 ? menu_width : menu_offset) - navi_width
+    let target_width = Math.round(window.innerWidth - (Platform.screen('light') && menu_left == 0 ? menu_width : menu_offset) - navi_width)
 
     let wheight_targets = []
     for(let i = 0; i < layer_wheight.length; i++){
@@ -160,6 +162,8 @@ function frameUpdate(render){
         if(attr){
             heig -= attr.getBoundingClientRect().height
         }
+
+        heig = Math.round(heig)
 
         if(read !== heig) wheight_targets.push({ elem, heig })
     }
@@ -175,6 +179,8 @@ function frameUpdate(render){
             heig -= attr.getBoundingClientRect().height
         }
 
+        heig = Math.round(heig)
+
         if(read !== heig) height_targets.push({ elem, heig })
     }
 
@@ -182,15 +188,15 @@ function frameUpdate(render){
         let elem = layer_width[i],
             read = parseFloat(elem.style.width)
 
-        if(read !== target_width) elem.style.width = target_width
+        if(read !== target_width) elem.style.width = target_width + 'px'
     }
 
     for(let i = 0; i < wheight_targets.length; i++){
-        wheight_targets[i].elem.style.height = wheight_targets[i].heig
+        wheight_targets[i].elem.style.height = wheight_targets[i].heig + 'px'
     }
 
     for(let i = 0; i < height_targets.length; i++){
-        height_targets[i].elem.style.height = height_targets[i].heig
+        height_targets[i].elem.style.height = height_targets[i].heig + 'px'
     }
 }
 
@@ -216,7 +222,7 @@ function frameVisible(){
         for(let i = 0; i < elems.length; i++){
             let elem = elems[i]
 
-            if(!elem.call_visible && !(elem.called_visible && elem.visibility === 'visible')){
+            if(!elem.call_visible){
                 elem.bond = elem.getBoundingClientRect()
 
                 // определяем в какую ячейку попадает элемент

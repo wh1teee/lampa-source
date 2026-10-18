@@ -367,7 +367,7 @@ function change(url = ''){
     timer = setTimeout(()=>{
         if(url) load()
         else draw(false, false, true)
-    },220)
+    },1000)
 }
 
 /**

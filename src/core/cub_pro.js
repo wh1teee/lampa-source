@@ -1092,24 +1092,11 @@ function fetchNumJson(url, defaultMediaType = 'movie') {
 }
 
 function preloadNumFeeds() {
-    setTimeout(() => {
-        fetchNumJson(NUM_FEEDS.num_4k_uhd.url, 'movie')
-        fetchNumJson(NUM_AI_COLLECTIONS_URL, 'movie').then(list => {
-            if (Array.isArray(list)) numAiCollectionsCache = list
-        })
-    }, 350)
-
-    setTimeout(() => {
-        fetchNumJson(NUM_FEEDS.num_movies_new.url, 'movie')
-        fetchNumJson(NUM_FEEDS.num_tv_new.url, 'tv')
-        fetchNumJson(NUM_FEEDS.num_legends.url, 'movie')
-        fetchNumJson(NUM_FEEDS.num_cartoons.url, 'movie')
-        fetchNumJson(NUM_FEEDS.num_cartoons_tv.url, 'tv')
-        fetchNumJson(NUM_FEEDS.num_anime.url, 'tv')
-    }, 1200)
+    fetchNumJson(NUM_FEEDS.num_4k_uhd.url, 'movie')
+    fetchNumJson(NUM_AI_COLLECTIONS_URL, 'movie').then(list => {
+        if (Array.isArray(list)) numAiCollectionsCache = list
+    })
 }
-
-preloadNumFeeds()
 
 function getNumTorrentsForCard(card = {}) {
     if (!card || typeof card !== 'object') return []

@@ -10,6 +10,9 @@ import Bell from '../interaction/bell'
 import Arrays from '../utils/arrays'
 
 function init(){
+    if(!window.screen_width)  window.screen_width  = window.innerWidth || 1920
+    if(!window.screen_height) window.screen_height = window.innerHeight || 1080
+
     let agent = navigator.userAgent.toLowerCase()
 
     if(typeof webOS !== 'undefined' && webOS.platform.tv === true){
@@ -110,11 +113,14 @@ function tv(){
 }
 
 /**
- * Если это телевизор на базе приставки (Android TV, Mi Box, Nvidia Shield и т.п.)
+ * Если это телевизор на базе приставки (Android TV, Mi Box, Nvidia Shield, Ugoos SK1 и т.п.)
  * @returns Boolean
  */
 function tvbox(){
-    return Boolean(navigator.userAgent.toLowerCase().match(/googletv|google tv|mibox|mitv|smarttv|smart tv|google tv|android tv/i)) || Boolean(navigator.userAgent.toLowerCase().match(/android/i) && !Utils.isTouchDevice())
+    let agent = navigator.userAgent.toLowerCase()
+    if(Boolean(agent.match(/googletv|google tv|mibox|mitv|smarttv|smart tv|android tv|ugoos|\bsk1\b|amlogic|shield/i))) return true
+    if(is('android') && (window.innerWidth >= 1280 || window.screen_width >= 1280) && window.innerWidth > window.innerHeight) return true
+    return Boolean(agent.match(/android/i) && !Utils.isTouchDevice())
 }
 
 /**
@@ -130,7 +136,8 @@ function desktop() {
  * @returns Boolean
  */
 function mouse(){
-    return (screen('tv') && !tv()) || Storage.field('navigation_type') !== 'controll'
+    let nav = Storage.get('navigation_type', '') || Storage.field('navigation_type') || 'controll'
+    return (screen('tv') && !tv()) || nav !== 'controll'
 }
 
 /**

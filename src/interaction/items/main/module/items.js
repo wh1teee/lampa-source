@@ -55,13 +55,17 @@ export default {
         let add = this.loaded.shift()
 
         if(add && add.length){
-            this.frament = document.createDocumentFragment()
+            this.fragment = document.createDocumentFragment()
+
+            let start_idx = this.items.length
 
             add.forEach(this.emit.bind(this, 'createAndAppend'))
 
             this.scroll.append(this.fragment)
 
-            Layer.visible(this.scroll.render(true))
+            for(let i = start_idx; i < this.items.length; i++){
+                Layer.visible(this.items[i].render(true))
+            }
         }
     },
 

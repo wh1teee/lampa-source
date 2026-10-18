@@ -26,79 +26,13 @@ export function initMotionStyles() {
     style.id = 'cub-pro-tv-vibehack-motion'
     style.textContent = `
         :root {
-            --lampa-focus-in-ease: cubic-bezier(0.34, 1.48, 0.64, 1);
+            --lampa-focus-in-ease: cubic-bezier(0.22, 1, 0.36, 1);
             --lampa-focus-out-ease: cubic-bezier(0.22, 1, 0.36, 1);
-            --lampa-dur-focus-in: 260ms;
-            --lampa-dur-focus-out: 180ms;
+            --lampa-dur-focus-in: 180ms;
+            --lampa-dur-focus-out: 150ms;
             --lampa-vivid-rgb: 43, 92, 255;
             --lampa-vivid-hex: #2b5cff;
             --card-vivid-glow: rgba(43, 92, 255, 0.36);
-        }
-
-        /* Staggered Row Tile Entrance (ported from tv-vibehack/res/anim/tile_enter.xml: 420ms decelerate_cubic) */
-        @keyframes lampa-tile-enter {
-            0% {
-                opacity: 0;
-                translate: 0px 22%;
-                scale: 0.94;
-            }
-            100% {
-                opacity: 1;
-                translate: 0px 0px;
-                scale: 1;
-            }
-        }
-
-        .items-line__body .card {
-            animation: lampa-tile-enter 420ms cubic-bezier(0.215, 0.61, 0.355, 1) backwards;
-        }
-        .items-line__body .card:nth-child(1) { animation-delay: 0ms; }
-        .items-line__body .card:nth-child(2) { animation-delay: 28ms; }
-        .items-line__body .card:nth-child(3) { animation-delay: 56ms; }
-        .items-line__body .card:nth-child(4) { animation-delay: 84ms; }
-        .items-line__body .card:nth-child(5) { animation-delay: 112ms; }
-        .items-line__body .card:nth-child(6) { animation-delay: 140ms; }
-        .items-line__body .card:nth-child(7) { animation-delay: 168ms; }
-        .items-line__body .card:nth-child(8) { animation-delay: 196ms; }
-
-        /* Individual CSS Transform Properties & Specular Glass Rim (GlassView.java port) */
-        .card .card__view {
-            position: relative;
-            scale: 1;
-            translate: 0px 0px;
-            transition:
-                scale var(--lampa-dur-focus-out) var(--lampa-focus-out-ease),
-                translate var(--lampa-dur-focus-out) var(--lampa-focus-out-ease),
-                box-shadow var(--lampa-dur-focus-out) var(--lampa-focus-out-ease) !important;
-            will-change: scale, translate;
-        }
-
-        .card.focus .card__view,
-        .card.hover .card__view {
-            z-index: 12;
-            scale: 1.065;
-            translate: 0px -2px;
-            transition:
-                scale var(--lampa-dur-focus-in) var(--lampa-focus-in-ease),
-                translate var(--lampa-dur-focus-in) var(--lampa-focus-out-ease),
-                box-shadow var(--lampa-dur-focus-in) var(--lampa-focus-out-ease) !important;
-            box-shadow:
-                0 0 0 1.5px rgba(255, 255, 255, 0.86),
-                0 0 14px 2px rgba(255, 255, 255, 0.18),
-                0 12px 32px -2px var(--card-vivid-glow, rgba(43, 92, 255, 0.28)),
-                0 18px 40px -4px rgba(0, 0, 0, 0.78) !important;
-        }
-
-        /* Specular top-45% sheen over focused poster (GlassView.java:46-52) */
-        .card.focus .card__view::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            border-radius: inherit;
-            z-index: 4;
-            pointer-events: none;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.00) 45%);
-            opacity: 1;
         }
 
         /* Ambient HSV Radial Glow on Full Card (tv-vibehack MainActivity.java:310-316: center 32% 42%, radius 62%, alpha 0x5C -> 0x26 -> 0x00) */
@@ -131,12 +65,9 @@ export function initMotionStyles() {
             margin-right: 0.85em !important;
             border-radius: 0.85em !important;
             color: #ffffff !important;
-            background: linear-gradient(135deg, rgba(var(--lampa-vivid-rgb, 43, 92, 255), 0.44) 0%, rgba(20, 24, 34, 0.72) 100%) !important;
+            background: linear-gradient(135deg, rgba(var(--lampa-vivid-rgb, 43, 92, 255), 0.44) 0%, rgba(20, 24, 34, 0.90) 100%) !important;
             border: 1px solid rgba(255, 255, 255, 0.34) !important;
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
             transition:
-                scale 240ms var(--lampa-focus-in-ease),
                 background 180ms ease,
                 box-shadow 220ms ease !important;
         }
@@ -151,7 +82,6 @@ export function initMotionStyles() {
             background: linear-gradient(135deg, rgba(var(--lampa-vivid-rgb, 43, 92, 255), 0.86) 0%, rgba(var(--lampa-vivid-rgb, 43, 92, 255), 0.48) 100%) !important;
             color: #ffffff !important;
             border: 1.5px solid rgba(255, 255, 255, 0.95) !important;
-            scale: 1.05;
             box-shadow:
                 0 0 0 2px rgba(255, 255, 255, 0.25),
                 0 10px 28px rgba(0, 0, 0, 0.65),

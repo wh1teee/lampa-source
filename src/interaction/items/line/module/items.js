@@ -72,9 +72,13 @@ export default {
 
         if(this.has(MoreFirst)) start -= 1
         
-        this.data.results.slice(start, size).forEach(this.emit.bind(this, 'createAndAppend'))
+        let slice = this.data.results.slice(start, size)
 
-        Layer.visible(this.scroll.render(true))
+        if(slice.length){
+            slice.forEach(this.emit.bind(this, 'createAndAppend'))
+
+            Layer.visible(this.scroll.render(true))
+        }
     },
 
     onDestroy: function(){

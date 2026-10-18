@@ -176,9 +176,7 @@ class ActivitySlide{
 
         this.component.stop && this.component.stop()
 
-        if(this.slide && this.slide.setAttribute){
-            this.slide.setAttribute('aria-hidden', 'true')
-        }
+        this.slide.remove()
     }
 
     /**
